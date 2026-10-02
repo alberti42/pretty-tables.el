@@ -327,6 +327,21 @@ background, see `pretty-tables--row-face'.  It is added with
     (add-face-text-property (match-beginning 0) (length string)
                             'pretty-tables-row-line t string)))
 
+(defun pretty-tables--prefix (pos)
+  "Return the prefix of the screen lines of a row drawn from POS.
+It is the `line-prefix' of the line POS is on, followed by the text
+from the start of that line to POS, such as the indentation of the
+table.  The first screen line of the row has both from the buffer;
+the prefix gives the same indentation to the other screen lines.
+A `line-prefix' that is not a string is a display specification, and
+is put in the prefix as the `display' of a space."
+  (let* ((bol (save-excursion (goto-char pos) (line-beginning-position)))
+         (line (or (get-char-property bol 'line-prefix) line-prefix)))
+    (concat (cond ((null line) "")
+                  ((stringp line) line)
+                  (t (propertize " " 'display line)))
+            (buffer-substring bol pos))))
+
 (defun pretty-tables--render-table (table revealed)
   "Cover each row of TABLE with an overlay that draws it aligned.
 TABLE is a table as `pretty-tables-enable' describes it.  The row
@@ -383,10 +398,13 @@ starting at REVEALED is left as raw text."
             (pretty-tables--add-line-face string 'pretty-tables-header-row)))
          (when table-face
            (add-face-text-property 0 (length string) table-face t string))
-         (add-text-properties 0 (length string)
-                              (list 'keymap pretty-tables-row-map
-                                    'pointer 'arrow)
-                              string)
+         (let ((prefix (pretty-tables--prefix beg)))
+           (add-text-properties 0 (length string)
+                                (list 'keymap pretty-tables-row-map
+                                      'pointer 'arrow
+                                      'line-prefix prefix
+                                      'wrap-prefix prefix)
+                                string))
          (overlay-put ov 'pretty-tables t)
          (overlay-put ov 'pretty-tables-string string)
          (overlay-put ov 'evaporate t)

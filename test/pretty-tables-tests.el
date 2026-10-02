@@ -62,19 +62,20 @@
   (save-excursion
     (goto-char beg)
     (forward-line 0)
-    (while (and (looking-at-p "|") (not (bobp)))
+    (while (and (looking-at-p "[ \t]*|") (not (bobp)))
       (forward-line -1))
     (let (tables)
       (while (and (< (point) end) (not (eobp)))
-        (if (not (looking-at-p "|"))
+        (if (not (looking-at-p "[ \t]*|"))
             (forward-line 1)
           (let ((tbeg (point)) rows)
-            (while (looking-at-p "|")
-              (push (list :kind (if (looking-at-p "|-") 'separator 'data)
-                          :beg (point) :end (pos-eol)
-                          :cells (pretty-tables-tests--row-cells
-                                  (point) (pos-eol)))
-                    rows)
+            (while (looking-at "[ \t]*\\(|\\)\\(-\\)?")
+              (let ((rbeg (match-beginning 1)))
+                (push (list :kind (if (match-beginning 2) 'separator 'data)
+                            :beg rbeg :end (pos-eol)
+                            :cells (pretty-tables-tests--row-cells
+                                    rbeg (pos-eol)))
+                      rows))
               (forward-line 1))
             (setq rows (nreverse rows))
             ;; The rows before the first separator are the header.
@@ -261,6 +262,19 @@ An overlay's `invisible' property hides them from
                    '("| a   | bb |"
                      "|-----|----|"
                      "| ccc | d  |")))))
+
+(ert-deftest pretty-tables-test-indented-table ()
+  "The screen lines of a row are indented as its first one.
+The prefix is the line's `line-prefix' and the text before the row."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n  | a | b |\n  |---|---|\n  | one<br>two | x |\n"
+    (setq-local line-prefix ">")
+    (font-lock-flush)
+    (jit-lock-fontify-now)
+    (let ((row (car (last (pretty-tables-tests--row-strings)))))
+      (should (equal (substring-no-properties row) "| one | x |\n| two |   |"))
+      (should (equal (get-text-property 0 'line-prefix row) ">  "))
+      (should (equal (get-text-property 0 'wrap-prefix row) ">  ")))))
 
 (ert-deftest pretty-tables-test-alignments ()
   "The table's alignments place the cells in their columns."

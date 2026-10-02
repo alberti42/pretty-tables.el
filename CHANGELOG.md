@@ -12,6 +12,13 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- In an indented table, the screen lines of a drawn row after the first
+  are indented as the first one. Each row string gets a `line-prefix` and
+  a `wrap-prefix`: the `line-prefix` of the line the row is on, followed by
+  the text from the start of that line to the row.
+
 ## [0.2.0] - 2026-10-02
 
 ### Added
