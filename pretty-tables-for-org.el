@@ -46,7 +46,11 @@
 ;; data row.  Columns that `org-table-shrink' narrows are read as they
 ;; are displayed.  The rows above the first separator are the header
 ;; when a data row follows that separator.  Table.el tables are not
-;; drawn.
+;; drawn, and neither is a table whose `#+ATTR_ORG' sets
+;; `:pretty-tables' to nil:
+;;
+;;   #+ATTR_ORG: :pretty-tables nil
+;;   | a | b |
 ;;
 ;; The row point is on is shown as its raw text, so it can be edited.
 ;; After a scroll command, a row point moved onto stays drawn until the
@@ -61,6 +65,9 @@
 (require 'org-fold)
 (require 'org-table)
 (require 'pretty-tables)
+
+(declare-function org-export-read-attribute "ox"
+                  (attribute element &optional property))
 
 ;;; Reading the buffer
 
@@ -153,11 +160,22 @@ row's.  The value is a table as `pretty-tables-enable' describes it."
           :alignments (pretty-tables-for-org--alignments rows)
           :rows rows)))
 
+(defun pretty-tables-for-org--raw-p (table)
+  "Return non-nil when TABLE, an org-element table, is shown as its text.
+That is when its `#+ATTR_ORG' sets `:pretty-tables' to nil."
+  (when (org-element-property :attr_org table)
+    (require 'ox)
+    ;; The value nil is read as nil, as when the property is missing.
+    (let ((attributes (org-export-read-attribute :attr_org table)))
+      (and (plist-member attributes :pretty-tables)
+           (null (plist-get attributes :pretty-tables))))))
+
 (defun pretty-tables-for-org--tables (beg end)
   "Return the Org tables that overlap BEG to END.
 Each is a table as `pretty-tables-enable' describes it.  Table.el
 tables and lines starting with `|' that are not in a table, as in a
-source block, are left out."
+source block, are left out.  A table whose `#+ATTR_ORG' sets
+`:pretty-tables' to nil is returned with `:raw' t."
   (save-excursion
     (save-match-data
       (goto-char beg)
@@ -167,14 +185,34 @@ source block, are left out."
                     (re-search-forward org-table-line-regexp end t))
           (let ((table (org-element-lineage (org-element-at-point) 'table t)))
             (if (and table (eq (org-element-property :type table) 'org))
-                (let ((tend (org-element-property :contents-end table)))
-                  (push (pretty-tables-for-org--table
-                         (org-element-property :contents-begin table)
-                         (if (eq (char-before tend) ?\n) (1- tend) tend))
+                (let* ((tbeg (org-element-property :contents-begin table))
+                       (tend (org-element-property :contents-end table))
+                       (rend (if (eq (char-before tend) ?\n) (1- tend) tend)))
+                  (push (if (pretty-tables-for-org--raw-p table)
+                            (list :beg tbeg :end rend :raw t)
+                          (pretty-tables-for-org--table tbeg rend))
                         tables)
                   (goto-char tend))
               (forward-line 1))))
         (nreverse tables)))))
+
+(defun pretty-tables-for-org--extend-region (start _end _old-len)
+  "Refontify the first row of the table below a changed keyword line.
+A change on a `#+' line, such as `#+ATTR_ORG', is refontified alone,
+so a table under it would not be drawn again.  When the line START is
+on, and the `#+' lines after it, are followed by a table, this extends
+`jit-lock-end' to the end of the table's first line.  Runs from
+`jit-lock-after-change-extend-region-functions'."
+  (defvar jit-lock-end)
+  (save-excursion
+    (save-match-data
+      (goto-char start)
+      (forward-line 0)
+      (when (looking-at-p "[ \t]*#\\+")
+        (while (looking-at-p "[ \t]*#\\+")
+          (forward-line 1))
+        (when (looking-at-p org-table-line-regexp)
+          (setq jit-lock-end (max jit-lock-end (pos-eol))))))))
 
 (defun pretty-tables-for-org--draw-separator (widths _alignments)
   "Return the string drawing a separator row for the column WIDTHS."
@@ -203,12 +241,17 @@ The buffer text is not changed.  The row point is on is shown as its
 raw text, except after a scroll command moved point onto it."
   :lighter nil
   (if pretty-tables-for-org-mode
-      (pretty-tables-enable
-       :tables #'pretty-tables-for-org--tables
-       :separator #'pretty-tables-for-org--draw-separator
-       :face 'org-table
-       :invisible #'pretty-tables-for-org--invisible-p
-       :follow #'org-open-at-point)
+      (progn
+        (add-hook 'jit-lock-after-change-extend-region-functions
+                  #'pretty-tables-for-org--extend-region nil t)
+        (pretty-tables-enable
+         :tables #'pretty-tables-for-org--tables
+         :separator #'pretty-tables-for-org--draw-separator
+         :face 'org-table
+         :invisible #'pretty-tables-for-org--invisible-p
+         :follow #'org-open-at-point))
+    (remove-hook 'jit-lock-after-change-extend-region-functions
+                 #'pretty-tables-for-org--extend-region t)
     (pretty-tables-disable)))
 
 (provide 'pretty-tables-for-org)

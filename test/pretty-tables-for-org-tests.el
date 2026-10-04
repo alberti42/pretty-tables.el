@@ -226,5 +226,49 @@ Font-lock and `pretty-tables-for-org-mode' are on, the table width is
     (should-not (pretty-tables-for-org-tests--overlays))
     (should-not pretty-tables--adaptor)))
 
+(ert-deftest pretty-tables-for-org-test-attribute-raw ()
+  "A table whose `#+ATTR_ORG' sets `:pretty-tables' to nil is not drawn."
+  (pretty-tables-for-org-tests--with-buffer
+      "* Title\n\n#+ATTR_ORG: :pretty-tables nil\n| a | bb |\n\n| c | d |\n"
+    (should (equal (pretty-tables-for-org-tests--rows) '("| c | d |")))))
+
+(ert-deftest pretty-tables-for-org-test-attribute-other ()
+  "A table is drawn when `#+ATTR_ORG' does not set `:pretty-tables' to nil."
+  (dolist (attribute '("#+ATTR_ORG: :width 30\n"
+                       "#+ATTR_ORG: :pretty-tables t\n"))
+    (pretty-tables-for-org-tests--with-buffer
+        (concat "* Title\n\n" attribute "| a | bb |\n")
+      (should (equal (pretty-tables-for-org-tests--rows) '("| a | bb |"))))))
+
+(ert-deftest pretty-tables-for-org-test-attribute-edit ()
+  "Adding the attribute shows the table as text; removing it draws it."
+  (pretty-tables-for-org-tests--with-buffer
+      "* Title\n\n| a | bb |\n| ccc | d |\n"
+    (should (pretty-tables-for-org-tests--overlays))
+    (goto-char (point-min))
+    (search-forward "\n\n")
+    (insert "#+ATTR_ORG: :pretty-tables nil\n")
+    (jit-lock-fontify-now)
+    (should-not (pretty-tables-for-org-tests--overlays))
+    (delete-region (pos-bol 0) (point))
+    (jit-lock-fontify-now)
+    (should (equal (length (pretty-tables-for-org-tests--overlays)) 2))))
+
+(ert-deftest pretty-tables-for-org-test-attribute-change ()
+  "Changing the value of the attribute draws the table again."
+  (pretty-tables-for-org-tests--with-buffer
+      "* Title\n\n#+ATTR_ORG: :pretty-tables nil\n| a | bb |\n| ccc | d |\n"
+    (should-not (pretty-tables-for-org-tests--overlays))
+    (goto-char (point-min))
+    (search-forward ":pretty-tables ")
+    (delete-char 3)
+    (insert "t")
+    (jit-lock-fontify-now)
+    (should (equal (length (pretty-tables-for-org-tests--overlays)) 2))
+    (delete-char -1)
+    (insert "nil")
+    (jit-lock-fontify-now)
+    (should-not (pretty-tables-for-org-tests--overlays))))
+
 (provide 'pretty-tables-for-org-tests)
 ;;; pretty-tables-for-org-tests.el ends here

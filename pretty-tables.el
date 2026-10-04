@@ -419,8 +419,10 @@ Runs from `jit-lock-functions' after font-lock, since the drawing reads
 the faces and invisibility font-lock puts on the cells.  A table is
 drawn whole, so the parts of it outside BEG to END are fontified
 first.
-The row `pretty-tables--reveal' revealed stays raw.  Point is not
-used: `jit-lock-fontify-now' moves it to the start of the chunk."
+A table whose `:raw' is non-nil is not drawn, and its row overlays
+are deleted.  The row `pretty-tables--reveal' revealed stays raw.
+Point is not used: `jit-lock-fontify-now' moves it to the start of the
+chunk."
   (unless pretty-tables--rendering
     (let ((pretty-tables--rendering t)
           (revealed (and pretty-tables--revealed
@@ -428,8 +430,11 @@ used: `jit-lock-fontify-now' moves it to the start of the chunk."
       (pretty-tables--delete-overlays beg end)
       (dolist (table (funcall (plist-get pretty-tables--adaptor :tables)
                               beg end))
-        (jit-lock-fontify-now (plist-get table :beg) (plist-get table :end))
-        (pretty-tables--render-table table revealed)))))
+        (if (plist-get table :raw)
+            (pretty-tables--delete-overlays (plist-get table :beg)
+                                            (plist-get table :end))
+          (jit-lock-fontify-now (plist-get table :beg) (plist-get table :end))
+          (pretty-tables--render-table table revealed))))))
 
 ;;; Point and mouse
 
@@ -547,6 +552,9 @@ A table is a plist with these properties:
 `:rows'         The rows, in buffer order.
 `:alignments'   A list with an alignment per column: `left', `right'
                 or `center'.  A column with none is `left'.
+`:raw'          Non-nil to show the table as its text: it is not
+                drawn, and its rows drawn before are shown as text.
+                `:rows' and `:alignments' are then not used.
 
 A row is a plist with these properties:
 

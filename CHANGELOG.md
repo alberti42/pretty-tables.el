@@ -12,6 +12,14 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- A table whose `#+ATTR_ORG` sets `:pretty-tables` to nil is not drawn
+  by `pretty-tables-for-org-mode`.
+- The table property `:raw` of `pretty-tables-enable`: a table whose
+  `:raw` is non-nil is not drawn, and its rows drawn before are shown as
+  text.
+
 ### Fixed
 
 - In an indented table, the screen lines of a drawn row after the first

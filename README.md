@@ -164,6 +164,12 @@ The face `pretty-tables-header-row` covers the whole header row, pipes included,
 - Columns that `org-table-shrink` narrows are read as they are displayed.
 - Text hidden by folding is read as if it were shown, so a table drawn while its heading was folded has the right widths when the heading is unfolded.
 - Table.el tables, `#+TBLFM` lines, and lines starting with `|` in a source block are not drawn.
+- A table whose `#+ATTR_ORG` sets `:pretty-tables` to nil is not drawn:
+
+  ```org
+  #+ATTR_ORG: :pretty-tables nil
+  | a | b |
+  ```
 - The row point is on is shown raw, and `org-table-align` keeps that row aligned with the other raw rows, not with the drawn ones.
 
 ## Hiding link markup with spaces
