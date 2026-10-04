@@ -22,6 +22,9 @@ to `X.Y.Z`.
 
 ### Fixed
 
+- `pretty-tables-for-org-mode` no longer loops forever when a table
+  extends past the accessible portion of a narrowed buffer. Tables are
+  now drawn with the buffer widened, as font-lock fontifies it.
 - In an indented table, the screen lines of a drawn row after the first
   are indented as the first one. Each row string gets a `line-prefix` and
   a `wrap-prefix`: the `line-prefix` of the line the row is on, followed by

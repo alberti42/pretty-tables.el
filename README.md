@@ -170,6 +170,7 @@ The face `pretty-tables-header-row` covers the whole header row, pipes included,
   #+ATTR_ORG: :pretty-tables nil
   | a | b |
   ```
+- In a narrowed buffer with `font-lock-dont-widen` set, a table that extends past the accessible portion is not drawn.
 - The row point is on is shown raw, and `org-table-align` keeps that row aligned with the other raw rows, not with the drawn ones.
 
 ## Hiding link markup with spaces

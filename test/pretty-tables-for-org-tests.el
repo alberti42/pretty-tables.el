@@ -270,5 +270,39 @@ Font-lock and `pretty-tables-for-org-mode' are on, the table width is
     (jit-lock-fontify-now)
     (should-not (pretty-tables-for-org-tests--overlays))))
 
+(defun pretty-tables-for-org-tests--narrow-into-table (edge)
+  "Narrow the buffer so that its EDGE, `start' or `end', cuts the table.
+The table's separator row is the last line kept or the first."
+  (goto-char (point-min))
+  (search-forward "|---")
+  (if (eq edge 'end)
+      (narrow-to-region (point-min) (pos-eol))
+    (narrow-to-region (pos-bol) (point-max))))
+
+(ert-deftest pretty-tables-for-org-test-narrowed ()
+  "A table cut by narrowing is drawn whole."
+  (dolist (edge '(start end))
+    (pretty-tables-for-org-tests--with-buffer
+        "* Title\n\n| a | bb |\n|---+---|\n| ccc | d |\n\nText\n"
+      (pretty-tables-for-org-tests--narrow-into-table edge)
+      (font-lock-flush)
+      (jit-lock-fontify-now)
+      (widen)
+      (should (equal (pretty-tables-for-org-tests--rows)
+                     '("| a   | bb |"
+                       "|-----+----|"
+                       "| ccc | d  |"))))))
+
+(ert-deftest pretty-tables-for-org-test-narrowed-dont-widen ()
+  "With `font-lock-dont-widen', a table cut by narrowing is not drawn."
+  (dolist (edge '(start end))
+    (pretty-tables-for-org-tests--with-buffer
+        "* Title\n\n| a | bb |\n|---+---|\n| ccc | d |\n\nText\n"
+      (setq-local font-lock-dont-widen t)
+      (pretty-tables-for-org-tests--narrow-into-table edge)
+      (font-lock-flush)
+      (jit-lock-fontify-now)
+      (should-not (pretty-tables-for-org-tests--overlays)))))
+
 (provide 'pretty-tables-for-org-tests)
 ;;; pretty-tables-for-org-tests.el ends here

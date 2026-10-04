@@ -418,23 +418,27 @@ starting at REVEALED is left as raw text."
 Runs from `jit-lock-functions' after font-lock, since the drawing reads
 the faces and invisibility font-lock puts on the cells.  A table is
 drawn whole, so the parts of it outside BEG to END are fontified
-first.
+first.  The buffer is widened unless `font-lock-dont-widen' is
+non-nil, as font-lock does, so a table is drawn whole in a narrowed
+buffer too.
 A table whose `:raw' is non-nil is not drawn, and its row overlays
 are deleted.  The row `pretty-tables--reveal' revealed stays raw.
 Point is not used: `jit-lock-fontify-now' moves it to the start of the
 chunk."
   (unless pretty-tables--rendering
-    (let ((pretty-tables--rendering t)
-          (revealed (and pretty-tables--revealed
-                         (overlay-start pretty-tables--revealed))))
-      (pretty-tables--delete-overlays beg end)
-      (dolist (table (funcall (plist-get pretty-tables--adaptor :tables)
-                              beg end))
-        (if (plist-get table :raw)
-            (pretty-tables--delete-overlays (plist-get table :beg)
-                                            (plist-get table :end))
-          (jit-lock-fontify-now (plist-get table :beg) (plist-get table :end))
-          (pretty-tables--render-table table revealed))))))
+    (save-restriction
+      (unless font-lock-dont-widen (widen))
+      (let ((pretty-tables--rendering t)
+            (revealed (and pretty-tables--revealed
+                           (overlay-start pretty-tables--revealed))))
+        (pretty-tables--delete-overlays beg end)
+        (dolist (table (funcall (plist-get pretty-tables--adaptor :tables)
+                                beg end))
+          (if (plist-get table :raw)
+              (pretty-tables--delete-overlays (plist-get table :beg)
+                                              (plist-get table :end))
+            (jit-lock-fontify-now (plist-get table :beg) (plist-get table :end))
+            (pretty-tables--render-table table revealed)))))))
 
 ;;; Point and mouse
 

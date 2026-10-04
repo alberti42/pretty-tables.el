@@ -52,6 +52,9 @@
 ;;   #+ATTR_ORG: :pretty-tables nil
 ;;   | a | b |
 ;;
+;; In a narrowed buffer with `font-lock-dont-widen' set, a table that
+;; extends past the accessible portion is not drawn.
+;;
 ;; The row point is on is shown as its raw text, so it can be edited.
 ;; After a scroll command, a row point moved onto stays drawn until the
 ;; next command.  Clicking a character of a drawn row moves point to
@@ -175,7 +178,9 @@ That is when its `#+ATTR_ORG' sets `:pretty-tables' to nil."
 Each is a table as `pretty-tables-enable' describes it.  Table.el
 tables and lines starting with `|' that are not in a table, as in a
 source block, are left out.  A table whose `#+ATTR_ORG' sets
-`:pretty-tables' to nil is returned with `:raw' t."
+`:pretty-tables' to nil is returned with `:raw' t, and so is a table
+that extends past the accessible portion of a narrowed buffer, with
+its bounds limited to that portion."
   (save-excursion
     (save-match-data
       (goto-char beg)
@@ -188,8 +193,16 @@ source block, are left out.  A table whose `#+ATTR_ORG' sets
                 (let* ((tbeg (org-element-property :contents-begin table))
                        (tend (org-element-property :contents-end table))
                        (rend (if (eq (char-before tend) ?\n) (1- tend) tend)))
-                  (push (if (pretty-tables-for-org--raw-p table)
-                            (list :beg tbeg :end rend :raw t)
+                  ;; `org-element' parses the whole buffer, so in a
+                  ;; narrowed buffer a table can extend past
+                  ;; `point-min' or `point-max', where its rows cannot
+                  ;; be read.
+                  (push (if (or (< tbeg (point-min))
+                                (> rend (point-max))
+                                (pretty-tables-for-org--raw-p table))
+                            (list :beg (max tbeg (point-min))
+                                  :end (min rend (point-max))
+                                  :raw t)
                           (pretty-tables-for-org--table tbeg rend))
                         tables)
                   (goto-char tend))
