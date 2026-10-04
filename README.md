@@ -5,13 +5,10 @@
 [![CI](https://github.com/alberti42/pretty-tables.el/actions/workflows/ci.yml/badge.svg)](https://github.com/alberti42/pretty-tables.el/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/github/license/alberti42/pretty-tables.el)](LICENSE)
 
-`pretty-tables` draws the tables of an Emacs buffer with aligned, wrapped columns. It changes how tables are displayed and nothing else: the buffer text is never modified. This repository ships three packages:
+`pretty-tables` draws the tables of an Emacs buffer with aligned, wrapped columns. It changes how tables are displayed and nothing else: the buffer text is never modified. This repository ships three packages: `pretty-tables`, the drawing, and the two adaptors that use it:
 
-| Package | Mode | Draws the tables of |
-|---|---|---|
-| `pretty-tables` | none | — the drawing, used by the two adaptors |
-| `pretty-tables-for-markdown` | `pretty-tables-for-markdown-mode` | the `markdown-ts-mode` bundled with Emacs 31 |
-| `pretty-tables-for-org` | `pretty-tables-for-org-mode` | `org-mode` |
+- **pretty-tables-for-markdown**: provides `pretty-tables-for-markdown-mode`, prettifying the tables of `markdown-ts-mode`, which is bundled with Emacs 31.
+- **pretty-tables-for-org**: provides `pretty-tables-for-org-mode`, prettifying the tables of `org-mode`.
 
 Each mode is a buffer-local minor mode, and nothing of `markdown-ts-mode` or `org-mode` is replaced or advised.
 
