@@ -178,6 +178,8 @@ A configuration that hides link markup with `(space :width N)`, to keep raw tabl
 
 An adaptor for another markup calls `pretty-tables-enable` from its minor mode, with a function that returns, for a region of the buffer, each table that overlaps it: the bounds of the table and of each row, the kind of each row (header, separator or data), the bounds of each cell, and an alignment per column. The docstring of `pretty-tables-enable` describes the data and the other keys. `pretty-tables-disable` turns the drawing off.
 
+An adaptor of a buffer that shows Org tables outside `org-mode` can call `pretty-tables-for-org-table` with the position of the first `|` of each row, and pass `pretty-tables-for-org-draw-separator` as `:separator`.
+
 ## Tests
 
 ```sh

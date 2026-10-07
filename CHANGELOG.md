@@ -12,6 +12,22 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- The adaptor key `:prefix` of `pretty-tables-enable`: a function called
+  with the start of a row that returns the `line-prefix` and
+  `wrap-prefix` of the string drawing it.
+- `pretty-tables-for-org-table`, which returns the Org table whose rows
+  start at the given positions, and `pretty-tables-for-org-draw-separator`,
+  for an adaptor of a buffer that shows Org tables outside `org-mode`.
+
+### Fixed
+
+- Tables are drawn again after an option or the theme changes in a
+  buffer without font-lock keywords, where `font-lock-flush` does
+  nothing. The tables are now marked for drawing with
+  `jit-lock-refontify`.
+
 ## [0.3.0] - 2026-10-04
 
 ### Added

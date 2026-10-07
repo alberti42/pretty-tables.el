@@ -129,26 +129,25 @@ one is `right' when the share of its non-empty cells that match
                 'left)))))
      (number-sequence 0 (1- ncols)))))
 
-(defun pretty-tables-for-org--table (beg end)
-  "Return the table whose rows lie from BEG to END.
-BEG is the start of the first row's line and END the end of the last
-row's.  The value is a table as `pretty-tables-enable' describes it."
-  (let (rows)
-    (save-excursion
-      (goto-char beg)
-      (while (< (point) end)
-        (when (looking-at "[ \t]*|")
-          (let ((rbeg (1- (match-end 0)))
-                (rend (pos-eol)))
-            (push (list :kind (if (looking-at-p org-table-hline-regexp)
-                                  'separator
-                                'data)
-                        :beg rbeg
-                        :end rend
-                        :cells (pretty-tables-for-org--row-cells rbeg rend))
-                  rows)))
-        (forward-line 1)))
-    (setq rows (nreverse rows))
+(defun pretty-tables-for-org-table (starts)
+  "Return the Org table whose rows start at STARTS.
+STARTS is the position of the first `|' of each row, in buffer order.
+A row whose `|' is followed by `-' is a separator.  The rows above the
+first separator are the header when a data row follows that
+separator.  The value is a table as `pretty-tables-enable' describes
+it, from the first row to the end of the last row's line.  An
+adaptor of a buffer that shows Org tables outside `org-mode' can call
+this."
+  (let ((rows (mapcar (lambda (rbeg)
+                        (let ((rend (save-excursion (goto-char rbeg) (pos-eol))))
+                          (list :kind (if (eq (char-after (1+ rbeg)) ?-)
+                                          'separator
+                                        'data)
+                                :beg rbeg
+                                :end rend
+                                :cells (pretty-tables-for-org--row-cells
+                                        rbeg rend))))
+                      starts)))
     ;; The rows above the first separator are the header when a data
     ;; row follows the separator.
     (let ((first (seq-position rows 'separator
@@ -158,10 +157,23 @@ row's.  The value is a table as `pretty-tables-enable' describes it."
                            (nthcdr first rows)))
         (dotimes (i first)
           (plist-put (nth i rows) :kind 'header))))
-    (list :beg beg
-          :end end
+    (list :beg (car starts)
+          :end (plist-get (car (last rows)) :end)
           :alignments (pretty-tables-for-org--alignments rows)
           :rows rows)))
+
+(defun pretty-tables-for-org--table (beg end)
+  "Return the table whose rows lie from BEG to END.
+BEG is the start of the first row's line and END the end of the last
+row's.  The value is a table as `pretty-tables-enable' describes it."
+  (let (starts)
+    (save-excursion
+      (goto-char beg)
+      (while (< (point) end)
+        (when (looking-at "[ \t]*|")
+          (push (1- (match-end 0)) starts))
+        (forward-line 1)))
+    (pretty-tables-for-org-table (nreverse starts))))
 
 (defun pretty-tables-for-org--raw-p (table)
   "Return non-nil when TABLE, an org-element table, is shown as its text.
@@ -227,7 +239,7 @@ on, and the `#+' lines after it, are followed by a table, this extends
         (when (looking-at-p org-table-line-regexp)
           (setq jit-lock-end (max jit-lock-end (pos-eol))))))))
 
-(defun pretty-tables-for-org--draw-separator (widths _alignments)
+(defun pretty-tables-for-org-draw-separator (widths _alignments)
   "Return the string drawing a separator row for the column WIDTHS."
   (concat "|"
           (mapconcat (lambda (w) (make-string (+ 2 w) ?-)) widths "+")
@@ -259,7 +271,7 @@ raw text, except after a scroll command moved point onto it."
                   #'pretty-tables-for-org--extend-region nil t)
         (pretty-tables-enable
          :tables #'pretty-tables-for-org--tables
-         :separator #'pretty-tables-for-org--draw-separator
+         :separator #'pretty-tables-for-org-draw-separator
          :face 'org-table
          :invisible #'pretty-tables-for-org--invisible-p
          :follow #'org-open-at-point))

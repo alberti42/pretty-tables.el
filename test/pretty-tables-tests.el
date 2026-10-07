@@ -276,6 +276,43 @@ The prefix is the line's `line-prefix' and the text before the row."
       (should (equal (get-text-property 0 'line-prefix row) ">  "))
       (should (equal (get-text-property 0 'wrap-prefix row) ">  ")))))
 
+(ert-deftest pretty-tables-test-prefix-function ()
+  "The adaptor's `:prefix' function gives the prefix of a row."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n  | a | b |\n  |---|---|\n  | one<br>two | x |\n"
+    (pretty-tables-enable :tables #'pretty-tables-tests--tables
+                          :separator #'pretty-tables-tests--separator
+                          :line-break "<br>"
+                          :prefix (lambda (pos) (format "%d:" pos)))
+    (jit-lock-fontify-now)
+    (let* ((ov (car (last (pretty-tables-tests--overlays))))
+           (row (overlay-get ov 'pretty-tables-string))
+           (prefix (format "%d:" (overlay-start ov))))
+      (should (equal (get-text-property 0 'line-prefix row) prefix))
+      (should (equal (get-text-property 0 'wrap-prefix row) prefix)))))
+
+(ert-deftest pretty-tables-test-option-without-keywords ()
+  "Setting an option draws the tables again in a buffer without keywords.
+There `font-lock-fontified' is nil, and `font-lock-flush' does nothing."
+  (let ((buf (generate-new-buffer "pretty-tables-test")))
+    (unwind-protect
+        (with-current-buffer buf
+          (insert "| aaaa bbbb | c |\n")
+          (text-mode)
+          (let ((noninteractive nil))
+            (font-lock-mode 1))
+          (should-not font-lock-fontified)
+          (setq-local pretty-tables-width 80)
+          (pretty-tables-enable :tables #'pretty-tables-tests--tables
+                                :separator #'pretty-tables-tests--separator)
+          (jit-lock-fontify-now)
+          (should (equal (pretty-tables-tests--rows) '("| aaaa bbbb | c |")))
+          (setq-local pretty-tables-width 12)
+          (jit-lock-fontify-now)
+          (should (equal (pretty-tables-tests--rows)
+                         '("| aaaa     | c |\n| bbbb     |   |"))))
+      (kill-buffer buf))))
+
 (ert-deftest pretty-tables-test-alignments ()
   "The table's alignments place the cells in their columns."
   (pretty-tables-tests--with-buffer

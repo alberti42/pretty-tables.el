@@ -78,7 +78,7 @@ Font-lock and `pretty-tables-for-org-mode' are on, the table width is
 
 (ert-deftest pretty-tables-for-org-test-draw-separator ()
   "A separator row joins the columns with `+'."
-  (should (equal (pretty-tables-for-org--draw-separator '(3 1) '(left left))
+  (should (equal (pretty-tables-for-org-draw-separator '(3 1) '(left left))
                  "|-----+---|")))
 
 (ert-deftest pretty-tables-for-org-test-draw-table ()
@@ -303,6 +303,22 @@ The table's separator row is the last line kept or the first."
       (font-lock-flush)
       (jit-lock-fontify-now)
       (should-not (pretty-tables-for-org-tests--overlays)))))
+
+;;; Tables outside `org-mode'
+
+(ert-deftest pretty-tables-for-org-test-table-from-starts ()
+  "`pretty-tables-for-org-table' reads a table from its row starts.
+The buffer is not in `org-mode', and text precedes each row."
+  (with-temp-buffer
+    (insert "> | a | b |\n> |---+---|\n> | 1 | x |\n")
+    (let* ((table (pretty-tables-for-org-table '(3 15 27)))
+           (rows (plist-get table :rows)))
+      (should (equal (plist-get table :beg) 3))
+      (should (equal (plist-get table :end) 36))
+      (should (equal (mapcar (lambda (row) (plist-get row :kind)) rows)
+                     '(header separator data)))
+      (should (equal (plist-get (nth 2 rows) :cells) '((28 . 31) (32 . 35))))
+      (should (equal (plist-get table :alignments) '(right left))))))
 
 (provide 'pretty-tables-for-org-tests)
 ;;; pretty-tables-for-org-tests.el ends here

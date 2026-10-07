@@ -398,7 +398,9 @@ starting at REVEALED is left as raw text."
             (pretty-tables--add-line-face string 'pretty-tables-header-row)))
          (when table-face
            (add-face-text-property 0 (length string) table-face t string))
-         (let ((prefix (pretty-tables--prefix beg)))
+         (let ((prefix (funcall (or (plist-get pretty-tables--adaptor :prefix)
+                                    #'pretty-tables--prefix)
+                                beg)))
            (add-text-properties 0 (length string)
                                 (list 'keymap pretty-tables-row-map
                                       'pointer 'arrow
@@ -508,13 +510,13 @@ is the buffer whose local value changed, or nil for the default value.
 The tables are drawn again in WHERE, or in every buffer when the
 default value changed, if an adaptor is on there.  A `let' binding
 does not draw them again.  The watcher runs before the value changes;
-`font-lock-flush' only marks the text, and jit-lock draws the tables
+`jit-lock-refontify' only marks the text, and jit-lock draws the tables
 at the next redisplay, when the new value is in place."
   (when (memq operation '(set makunbound))
     (dolist (buffer (if (buffer-live-p where) (list where) (buffer-list)))
       (with-current-buffer buffer
         (when pretty-tables--adaptor
-          (font-lock-flush))))))
+          (jit-lock-refontify))))))
 
 (defun pretty-tables--theme-changed (_theme)
   "Draw the tables again after a theme is enabled or disabled.
@@ -525,7 +527,7 @@ again.  Runs from `enable-theme-functions' and
   (dolist (buffer (buffer-list))
     (with-current-buffer buffer
       (when pretty-tables--adaptor
-        (font-lock-flush)))))
+        (jit-lock-refontify)))))
 
 ;;; Interface
 
@@ -549,6 +551,12 @@ An adaptor calls this from its minor mode.  ADAPTOR is a plist:
 `:follow'     A function called with no arguments, point on a link
               of a clicked row, that follows the link.  The default
               runs the command RET runs there.
+`:prefix'     A function called with the start of a row that
+              returns the `line-prefix' and `wrap-prefix' of the
+              string drawing it, which start its screen lines after
+              the first.  The default is the `line-prefix' of the
+              row's line followed by the text from the start of
+              that line to the row.
 
 A table is a plist with these properties:
 
@@ -585,7 +593,9 @@ cells, so it runs from `jit-lock-functions' after font-lock."
     (add-variable-watcher option #'pretty-tables--option-changed))
   (add-hook 'enable-theme-functions #'pretty-tables--theme-changed)
   (add-hook 'disable-theme-functions #'pretty-tables--theme-changed)
-  (font-lock-flush))
+  ;; Not `font-lock-flush', which does nothing in a buffer without
+  ;; font-lock keywords; in a buffer with them, it calls this.
+  (jit-lock-refontify))
 
 (defun pretty-tables-disable ()
   "Stop drawing the tables of the current buffer, and show their text."
