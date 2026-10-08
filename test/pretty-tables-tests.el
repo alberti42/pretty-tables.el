@@ -313,6 +313,19 @@ There `font-lock-fontified' is nil, and `font-lock-flush' does nothing."
                          '("| aaaa     | c |\n| bbbb     |   |"))))
       (kill-buffer buf))))
 
+(ert-deftest pretty-tables-test-safe-local-variables ()
+  "The options are safe as file-local variables with a value of their type."
+  (dolist (case '((pretty-tables-width nil t) (pretty-tables-width 72 t)
+                  (pretty-tables-width -1 nil) (pretty-tables-width "72" nil)
+                  (pretty-tables-min-column-width 8 t)
+                  (pretty-tables-min-column-width -1 nil)
+                  (pretty-tables-stripe-rows nil t) (pretty-tables-stripe-rows 1 nil)
+                  (pretty-tables-row-lines t t) (pretty-tables-row-lines "t" nil)
+                  (pretty-tables-reveal always t) (pretty-tables-reveal writable t)
+                  (pretty-tables-reveal nil t) (pretty-tables-reveal yes nil)))
+    (should (eq (and (safe-local-variable-p (nth 0 case) (nth 1 case)) t)
+                (nth 2 case)))))
+
 (ert-deftest pretty-tables-test-alignments ()
   "The table's alignments place the cells in their columns."
   (pretty-tables-tests--with-buffer

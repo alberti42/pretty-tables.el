@@ -141,6 +141,8 @@ The options and faces belong to `pretty-tables`, so they apply to both modes.
 
 Setting `fill-column` (`C-x f`) or one of these options draws the tables again in the buffers where a mode is on.
 
+The options are safe as file-local and directory-local variables when their value has the option's type, so a file or a `.dir-locals.el` can set them without a prompt.
+
 The first, third, ... data rows are drawn with the face `pretty-tables-row` and the background of `hl-line`; the others with `pretty-tables-stripe` and the background of `lazy-highlight`, the face agent-shell's tables use. Only the background is taken from `hl-line` and `lazy-highlight`, so a theme that makes `lazy-highlight` bold does not make the rows bold. The theme sets both backgrounds, for a light theme and a dark one alike, and the tables are drawn again when a theme is enabled. A background set on `pretty-tables-row` or `pretty-tables-stripe` takes the place of the theme's. The line is the underline of the face `pretty-tables-row-line`, so it takes no screen line of its own; in a terminal it is an ordinary underline. Both faces are added after the faces of the cell text, so a link or a code span keeps its own colours. The table face of the markup, `markdown-ts-table` or `org-table`, is added after them.
 
 The cell text of header rows is drawn with the face `pretty-tables-header`, which inherits `bold`; it too is added after the faces of the cell text. To draw the header without bold, remove the inheritance:

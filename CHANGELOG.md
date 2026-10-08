@@ -12,6 +12,13 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- The options `pretty-tables-width`, `pretty-tables-min-column-width`,
+  `pretty-tables-stripe-rows`, `pretty-tables-row-lines` and
+  `pretty-tables-reveal` are safe as file-local and directory-local
+  variables when their value has the option's type.
+
 ## [0.4.0] - 2026-10-08
 
 ### Added

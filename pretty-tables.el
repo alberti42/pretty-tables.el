@@ -67,23 +67,27 @@
 (defcustom pretty-tables-width nil
   "Maximum width, in columns, of a displayed table.
 When nil, use `fill-column'."
-  :type '(choice (const :tag "fill-column" nil) natnum))
+  :type '(choice (const :tag "fill-column" nil) natnum)
+  :safe (lambda (value) (or (null value) (natnump value))))
 
 (defcustom pretty-tables-min-column-width 8
   "Width below which a column is not narrowed to fit the table width."
-  :type 'natnum)
+  :type 'natnum
+  :safe #'natnump)
 
 (defcustom pretty-tables-stripe-rows t
   "Non-nil means data rows are drawn with alternating backgrounds.
 The first, third, ... data rows get the face `pretty-tables-row',
 the others `pretty-tables-stripe'."
-  :type 'boolean)
+  :type 'boolean
+  :safe #'booleanp)
 
 (defcustom pretty-tables-row-lines nil
   "Non-nil means a line is drawn under each data row but the last.
 The line is the underline of the face `pretty-tables-row-line',
 so it takes no screen line of its own."
-  :type 'boolean)
+  :type 'boolean
+  :safe #'booleanp)
 
 (defcustom pretty-tables-reveal 'writable
   "When the row point is on is shown as its raw text.
@@ -93,7 +97,8 @@ shown as its raw text whatever the value, so a match in it can be
 seen."
   :type '(choice (const :tag "In every buffer" always)
                  (const :tag "In a buffer that is not read-only" writable)
-                 (const :tag "Never" nil)))
+                 (const :tag "Never" nil))
+  :safe (lambda (value) (memq value '(always writable nil))))
 
 (defface pretty-tables-row
   '((t))
