@@ -21,6 +21,14 @@ to `X.Y.Z`.
   start at the given positions, and `pretty-tables-for-org-draw-separator`,
   for an adaptor of a buffer that shows Org tables outside `org-mode`.
 
+### Changed
+
+- In a read-only buffer, the row point is on stays drawn, except during
+  an Isearch. The new option `pretty-tables-reveal` sets when the row is
+  shown as its raw text: `always`, `writable` (the default: in a buffer
+  that is not read-only) or `nil` (never). During an Isearch it is shown
+  whatever the value.
+
 ### Fixed
 
 - Tables are drawn again after an option or the theme changes in a

@@ -45,7 +45,9 @@
 ;; the face `pretty-tables-header', bold by default.
 ;;
 ;; The row point is on is shown as its raw text, so it can be edited and
-;; its links followed.  After a scroll command, a row point moved onto
+;; its links followed.  In a read-only buffer it stays drawn, except
+;; during an Isearch; `pretty-tables-reveal' changes that.  After a
+;; scroll command, a row point moved onto
 ;; stays drawn until the next command.  Clicking a character of a drawn
 ;; row moves point to that character in the buffer, and follows the link
 ;; there if there is one.
@@ -82,6 +84,16 @@ the others `pretty-tables-stripe'."
 The line is the underline of the face `pretty-tables-row-line',
 so it takes no screen line of its own."
   :type 'boolean)
+
+(defcustom pretty-tables-reveal 'writable
+  "When the row point is on is shown as its raw text.
+`always' means in every buffer, `writable' in a buffer that is not
+read-only, and nil never.  During an Isearch the row point is on is
+shown as its raw text whatever the value, so a match in it can be
+seen."
+  :type '(choice (const :tag "In every buffer" always)
+                 (const :tag "In a buffer that is not read-only" writable)
+                 (const :tag "Never" nil)))
 
 (defface pretty-tables-row
   '((t))
@@ -451,10 +463,16 @@ chunk."
 
 (defun pretty-tables--reveal ()
   "Show the row point is on as raw text, and draw the one point left.
-After a command with a non-nil `scroll-command' property, a row point
-moved onto stays drawn."
+The row is shown as raw text when `pretty-tables-reveal' says so, or
+during an Isearch.  After a command with a non-nil `scroll-command'
+property, a row point moved onto stays drawn."
   (let ((ov (pretty-tables--row-overlay-at-point))
         (old pretty-tables--revealed))
+    (unless (or isearch-mode
+                (pcase pretty-tables-reveal
+                  ('always t)
+                  ('writable (not buffer-read-only))))
+      (setq ov nil))
     (when (and (symbolp this-command) (get this-command 'scroll-command)
                (not (eq ov old)))
       (setq ov nil))

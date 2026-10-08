@@ -623,6 +623,49 @@ face takes its place."
       (should (overlay-get (nth 2 ovs) 'display))
       (should-not (overlay-get (nth 3 ovs) 'display)))))
 
+(ert-deftest pretty-tables-test-reveal-read-only ()
+  "In a read-only buffer the row point is on stays drawn by default.
+A row revealed before the buffer became read-only is drawn again."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should-not (overlay-get (nth 2 ovs) 'display))
+      (setq buffer-read-only t)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display))
+      (pretty-tables-tests--goto-row 3)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 3 ovs) 'display))
+      (should-not pretty-tables--revealed))))
+
+(ert-deftest pretty-tables-test-reveal-always ()
+  "With `pretty-tables-reveal' `always', a read-only row is revealed."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (pretty-tables-reveal 'always))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should-not (overlay-get (nth 2 ovs) 'display)))))
+
+(ert-deftest pretty-tables-test-reveal-never ()
+  "With `pretty-tables-reveal' nil, no row is revealed, except in Isearch."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (pretty-tables-reveal nil))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display))
+      (let ((isearch-mode " Isearch"))
+        (pretty-tables--reveal))
+      (should-not (overlay-get (nth 2 ovs) 'display))
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display)))))
+
 (ert-deftest pretty-tables-test-redraw-keeps-revealed ()
   "Drawing a table again leaves the revealed row raw.
 `jit-lock-fontify-now' moves point to the start of the region, so the

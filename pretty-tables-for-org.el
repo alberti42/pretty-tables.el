@@ -56,7 +56,8 @@
 ;; extends past the accessible portion is not drawn.
 ;;
 ;; The row point is on is shown as its raw text, so it can be edited.
-;; After a scroll command, a row point moved onto stays drawn until the
+;; In a read-only buffer it stays drawn, except during an Isearch;
+;; `pretty-tables-reveal' changes that.  After a scroll command, a row point moved onto stays drawn until the
 ;; next command.  Clicking a character of a drawn row moves point to
 ;; that character in the buffer, and opens the link there with
 ;; `org-open-at-point' if there is one.
@@ -263,7 +264,8 @@ unfolding it does not draw it again."
 (define-minor-mode pretty-tables-for-org-mode
   "Display Org tables with aligned, wrapped columns.
 The buffer text is not changed.  The row point is on is shown as its
-raw text, except after a scroll command moved point onto it."
+raw text when `pretty-tables-reveal' says so, except after a scroll
+command moved point onto it."
   :lighter nil
   (if pretty-tables-for-org-mode
       (progn

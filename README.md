@@ -122,7 +122,7 @@ With straight.el, from a local clone, one recipe per package, `pretty-tables` fi
 
 `M-x pretty-tables-for-markdown-mode` or `M-x pretty-tables-for-org-mode` turns the mode on in the current buffer; the hooks above turn it on in every `markdown-ts-mode` or `org-mode` buffer.
 
-- The row point is on is shown as its raw text, so it can be edited and its links followed.
+- The row point is on is shown as its raw text, so it can be edited and its links followed. In a read-only buffer it stays drawn, except during an Isearch; `pretty-tables-reveal` changes that.
 - After a scroll command, a row point moved onto stays drawn until the next command. A scroll command is one with a non-nil `scroll-command` property: `mwheel-scroll`, `pixel-scroll-precision`, `scroll-up-command`, `scroll-down-command` and the other scroll commands of Emacs.
 - Clicking a character of a drawn row moves point to that character in the buffer, and follows the link there if there is one. In Markdown the link is followed with the command RET runs there; in Org it is opened with `org-open-at-point`.
 - In Markdown, `markdown-ts-toggle-hide-markup` (`C-c C-x C-m`) shows and hides the markup; the tables are drawn again with the new widths.
@@ -137,6 +137,7 @@ The options and faces belong to `pretty-tables`, so they apply to both modes.
 |`pretty-tables-min-column-width`|`8`    |Width below which a column is not narrowed to fit the table width.           |
 |`pretty-tables-stripe-rows`     |`t`    |Non-nil means data rows are drawn with alternating backgrounds.              |
 |`pretty-tables-row-lines`       |`nil`  |Non-nil means a line is drawn under each data row but the last.              |
+|`pretty-tables-reveal`          |`writable`|When the row point is on is shown as its raw text: `always`, `writable` (in a buffer that is not read-only) or `nil` (never). During an Isearch it is shown whatever the value.|
 
 Setting `fill-column` (`C-x f`) or one of these options draws the tables again in the buffers where a mode is on.
 

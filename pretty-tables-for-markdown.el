@@ -48,7 +48,9 @@
 ;; `pretty-tables-stripe-rows' and `pretty-tables-row-lines'.
 ;;
 ;; The row point is on is shown as its raw text, so it can be edited and
-;; its links followed with RET.  After a scroll command, a row point
+;; its links followed with RET.  In a read-only buffer it stays drawn,
+;; except during an Isearch; `pretty-tables-reveal' changes that.
+;; After a scroll command, a row point
 ;; moved onto stays drawn until the next command.  Clicking a character
 ;; of a drawn row moves point to that character in the buffer, and
 ;; follows the link there if there is one.
@@ -209,7 +211,8 @@ parsers made for the cells."
 (define-minor-mode pretty-tables-for-markdown-mode
   "Display Markdown pipe tables with aligned, wrapped columns.
 The buffer text is not changed.  The row point is on is shown as its
-raw text, except after a scroll command moved point onto it.
+raw text when `pretty-tables-reveal' says so, except after a scroll
+command moved point onto it.
 Table cells are parsed as inline Markdown, so their links, emphasis and
 code are fontified."
   :lighter nil
