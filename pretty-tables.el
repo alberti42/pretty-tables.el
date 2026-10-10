@@ -55,6 +55,7 @@
 
 ;;; Code:
 
+(require 'image)
 (require 'jit-lock)
 (require 'subr-x)
 ;; Defines the `hl-line' face, whose background `pretty-tables-row' takes.
@@ -183,12 +184,24 @@ POS in `pretty-tables-pos' and (N) in `pretty-tables-image';
                          string)
     string))
 
+(defun pretty-tables--image-width (image)
+  "Return the width in pixels at which IMAGE is displayed, or nil.
+That is its `:width' times its `:scale': a number, or `default', which
+`create-image' gives and which stands for `image-scaling-factor'.  Nil
+when IMAGE has no `:width' in pixels."
+  (let ((width (image-property image :width))
+        (scale (image-property image :scale)))
+    (and (numberp width)
+         (* width (cond ((numberp scale) scale)
+                        ((eq scale 'default) (image-compute-scaling-factor))
+                        (t 1))))))
+
 (defun pretty-tables--visible-string (beg end)
   "Return the text between BEG and END as it is displayed.
 Invisible characters are dropped and a `display' string replaces the
 text it covers, with its newlines read as spaces.  A `display' image
-whose `pretty-tables-image-width' property gives its width in pixels
-is shown as an image, on a graphical display; see
+with a `:width' in pixels is shown as an image, on a graphical
+display; see `pretty-tables--image-width' and
 `pretty-tables--image-string'.  Whether a
 character is invisible is decided by the adaptor's `:invisible'
 function, by default `invisible-p'.  Each character carries the buffer
@@ -204,11 +217,11 @@ position it came from in the `pretty-tables-pos' property."
                        (next-single-property-change pos 'invisible nil end)
                        (next-single-char-property-change pos 'display nil end)))
             (display (get-char-property pos 'display))
-            (image-width (get-char-property pos 'pretty-tables-image-width)))
+            image-width)
         (cond
          ((funcall invisible pos))
          ((and (eq (car-safe display) 'image)
-               (numberp image-width)
+               (setq image-width (pretty-tables--image-width display))
                (display-images-p))
           (push (pretty-tables--image-string display image-width pos) parts))
          ((stringp display)

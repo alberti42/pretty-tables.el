@@ -28,10 +28,9 @@ to `X.Y.Z`.
   keeps the natural widths of its columns.  The option
   `pretty-tables-for-org-width-cookies` (default t) turns this off.
 - An image shown by an overlay in a cell is drawn in the table when the
-  overlay gives its width in pixels in the property
-  `pretty-tables-image-width`.  The image takes the fewest columns that
-  hold it, and its column is not narrowed below them.  latex-to-svg sets
-  the property on its equations.
+  image spec gives its width in pixels as `:width`.  The image takes the
+  fewest columns that hold its `:width` times its `:scale`, and its column
+  is not narrowed below them.
 - The options `pretty-tables-width`, `pretty-tables-min-column-width`,
   `pretty-tables-stripe-rows`, `pretty-tables-row-lines` and
   `pretty-tables-reveal` are safe as file-local and directory-local

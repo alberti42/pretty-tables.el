@@ -237,8 +237,10 @@ End.
                              (number-sequence 0 (1- (length s))))
                      '(1 3 3 4 4 4 5 6))))))
 
-(defconst pretty-tables-tests--image '(image :type svg :data "<svg/>")
-  "An image spec; batch mode cannot show it, so it is never loaded.")
+(defconst pretty-tables-tests--image
+  '(image :type svg :data "<svg/>" :width 25 :scale 1.0)
+  "An image spec 25 pixels wide.
+Batch mode cannot show it, so it is never loaded.")
 
 (defmacro pretty-tables-tests--with-images (&rest body)
   "Run BODY as on a graphical display whose font is 10 pixels wide."
@@ -253,7 +255,6 @@ End.
     (insert "a $x$ b")
     (let ((ov (make-overlay 3 6)))
       (overlay-put ov 'display pretty-tables-tests--image)
-      (overlay-put ov 'pretty-tables-image-width 25)
       (pretty-tables-tests--with-images
         (let ((s (pretty-tables--visible-string 1 8)))
           ;; 25 pixels take 3 columns of 10 pixels.
@@ -274,11 +275,23 @@ End.
                       (pretty-tables--visible-string 1 8))
                      "a $x$ b"))
       ;; Without a width, the text is read.
-      (overlay-put ov 'pretty-tables-image-width nil)
+      (overlay-put ov 'display '(image :type svg :data "<svg/>"))
       (pretty-tables-tests--with-images
         (should (equal (substring-no-properties
                         (pretty-tables--visible-string 1 8))
                        "a $x$ b"))))))
+
+(ert-deftest pretty-tables-test-image-width ()
+  "An image's width is its `:width' times its `:scale'."
+  (should (equal (pretty-tables--image-width '(image :width 100 :scale 2.0))
+                 200.0))
+  (should (equal (pretty-tables--image-width '(image :width 100)) 100))
+  (let ((image-scaling-factor 1.5))
+    (should (equal (pretty-tables--image-width
+                    '(image :width 100 :scale default))
+                   150.0)))
+  (should-not (pretty-tables--image-width '(image :scale 2.0)))
+  (should-not (pretty-tables--image-width '(image :width (2 . em)))))
 
 (ert-deftest pretty-tables-test-break-word-image ()
   "A word is not broken inside an image."
@@ -310,8 +323,8 @@ End.
     (let ((ov (make-overlay (- (point-max) 6) (- (point-max) 3))))
       (should (equal (buffer-substring (overlay-start ov) (overlay-end ov))
                      "$x$"))
-      (overlay-put ov 'display pretty-tables-tests--image)
-      (overlay-put ov 'pretty-tables-image-width 95)
+      (overlay-put ov 'display
+                   '(image :type svg :data "<svg/>" :width 95 :scale 1.0))
       (setq-local pretty-tables-width 20)
       (pretty-tables-tests--with-images
         (jit-lock-refontify)

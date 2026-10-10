@@ -181,9 +181,9 @@ LaTeX equations in a table cell are drawn as images with [latex-to-svg](https://
 - [`latex-to-svg-for-markdown`](https://github.com/alberti42/latex-to-svg/blob/main/docs/latex-to-svg-for-markdown.md), for `markdown-ts-mode`, with `pretty-tables-for-markdown-mode`;
 - [`latex-to-svg-for-org`](https://github.com/alberti42/latex-to-svg/blob/main/docs/latex-to-svg-for-org.md), for `org-mode`, with `pretty-tables-for-org-mode`.
 
-An equation takes the columns that hold its image, and its column is not narrowed below them. The row point is on shows the LaTeX source, as every raw row does. This needs latex-to-svg 0.21.0 or later, which requires latex-to-svg-backend 0.14.0.
+An equation takes the columns that hold its image, and its column is not narrowed below them. The row point is on shows the LaTeX source, as every raw row does. This needs latex-to-svg 0.21.0 or later and a latex-to-svg-backend that builds its images with a `:width`, which no release does yet; with an earlier backend, a drawn row shows the LaTeX source.
 
-A package that shows text as an image, with an overlay whose `display` is the image, can have the image drawn in a table too. Its overlay gives the image's width in pixels in the property `pretty-tables-image-width`. The image then takes the fewest columns that hold that width, and its column is not narrowed below them. Without the property, or on a display that cannot show images, the cell shows the text under the overlay.
+A package that shows text as an image, with an overlay whose `display` is the image, can have the image drawn in a table too. The image spec gives its width in pixels as `:width`, Emacs's own image property; the image is displayed at that width times its `:scale`. The image then takes the fewest columns that hold that width, and its column is not narrowed below them. Without a `:width` in pixels, or on a display that cannot show images, the cell shows the text under the overlay.
 
 A table is drawn when jit-lock reaches it, so an image that appears or changes after that is not in the drawing. The package then calls `jit-lock-refontify` on the image's text, when an overlay with the property `pretty-tables` covers it, and the table is drawn again at the next redisplay. latex-to-svg does both for its equations.
 
