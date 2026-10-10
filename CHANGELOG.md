@@ -19,6 +19,14 @@ to `X.Y.Z`.
   `pretty-tables-reveal` are safe as file-local and directory-local
   variables when their value has the option's type.
 
+### Fixed
+
+- An Org table is drawn again when a column is shrunk or expanded, for
+  example with `C-c TAB` (`org-table-toggle-column-width`), and after a
+  command such as `org-table-insert-column` edits a table with shrunk
+  columns. For this, `pretty-tables-for-org` advises `org-table-expand`
+  and `org-table--shrink-columns`.
+
 ## [0.4.0] - 2026-10-08
 
 ### Added

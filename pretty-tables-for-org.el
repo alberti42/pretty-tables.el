@@ -44,7 +44,10 @@
 ;; share of its non-empty cells that match `org-table-number-regexp' is
 ;; at least `org-table-number-fraction'.  A row of cookies is drawn as a
 ;; data row.  Columns that `org-table-shrink' narrows are read as they
-;; are displayed.  The rows above the first separator are the header
+;; are displayed, and the table is drawn again when a column is shrunk
+;; or expanded; for that, the package advises `org-table-expand' and
+;; `org-table--shrink-columns'.  The
+;; rows above the first separator are the header
 ;; when a data row follows that separator.  Table.el tables are not
 ;; drawn, and neither is a table whose `#+ATTR_ORG' sets
 ;; `:pretty-tables' to nil:
@@ -280,6 +283,49 @@ command moved point onto it."
     (remove-hook 'jit-lock-after-change-extend-region-functions
                  #'pretty-tables-for-org--extend-region t)
     (pretty-tables-disable)))
+
+;;; Shrunk columns
+
+(defun pretty-tables-for-org--columns-expanded (&optional begin end)
+  "Draw the table from BEGIN to END again after its columns are expanded.
+BEGIN and END are the arguments of `org-table-expand', and nil means
+the table at point.  An `:after' advice of `org-table-expand'."
+  (when pretty-tables-for-org-mode
+    (save-excursion
+      (save-restriction
+        (widen)
+        (jit-lock-refontify (or begin (org-table-begin))
+                            (or end (org-table-end)))))))
+
+(defun pretty-tables-for-org--columns-shrunk (_columns beg end)
+  "Draw the table from BEG to END again after columns are shrunk.
+The arguments are those of `org-table--shrink-columns'.  An `:after'
+advice of `org-table--shrink-columns'."
+  (pretty-tables-for-org--columns-expanded beg end))
+
+;; Shrinking or expanding a column adds or deletes overlays and does not
+;; change the text, so jit-lock does not draw the table again, and Org
+;; runs no hook.  These advices run only when columns are shrunk or
+;; expanded; a check in `post-command-hook' would run after every
+;; command.  An advice of `org-table-expand' alone is not enough:
+;; `org-table--shrink-columns' calls `font-lock-ensure', which draws the
+;; table before the columns are shrunk.  `org-table--shrink-columns' is
+;; internal, but every command that shrinks columns calls it, including
+;; those that edit a table with shrunk columns and shrink them again.
+;; A CI job compares the two functions with a copy in
+;; `test/fixtures/org-table-shrink.el' and reports a change.
+(advice-add 'org-table-expand :after
+            #'pretty-tables-for-org--columns-expanded)
+(advice-add 'org-table--shrink-columns :after
+            #'pretty-tables-for-org--columns-shrunk)
+
+(defun pretty-tables-for-org-unload-function ()
+  "Remove the advices of `org-table-expand' and `org-table--shrink-columns'.
+Called by `unload-feature'; nil means unloading continues."
+  (advice-remove 'org-table-expand #'pretty-tables-for-org--columns-expanded)
+  (advice-remove 'org-table--shrink-columns
+                 #'pretty-tables-for-org--columns-shrunk)
+  nil)
 
 (provide 'pretty-tables-for-org)
 ;;; pretty-tables-for-org.el ends here

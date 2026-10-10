@@ -10,7 +10,7 @@
 - **pretty-tables-for-markdown**: provides `pretty-tables-for-markdown-mode`, prettifying the tables of `markdown-ts-mode`, which is bundled with Emacs 31.
 - **pretty-tables-for-org**: provides `pretty-tables-for-org-mode`, prettifying the tables of `org-mode`.
 
-Each mode is a buffer-local minor mode, and nothing of `markdown-ts-mode` or `org-mode` is replaced or advised.
+Each mode is a buffer-local minor mode, and nothing of `markdown-ts-mode` or `org-mode` is replaced. `pretty-tables-for-org` advises `org-table-expand` and `org-table--shrink-columns`, so a table is drawn again when a column is shrunk or expanded.
 
 Column widths come from the text a reader sees in each cell: characters that are invisible (for example link markup hidden by `markdown-ts-hide-markup`, or the hidden part of an Org link) take no room. When the table is wider than `pretty-tables-width`, the widest columns are narrowed and their cells are word-wrapped onto several screen lines. In Markdown, `<br>` in a cell starts a new line.
 
@@ -161,7 +161,7 @@ The face `pretty-tables-header-row` covers the whole header row, pipes included,
 
 - A column is aligned as `org-table-align` aligns it: by the first `<l>`, `<r>` or `<c>` cookie in it, or else to the right when the share of its non-empty cells that match `org-table-number-regexp` is at least `org-table-number-fraction`. A row of cookies is drawn as a data row.
 - The rows above the first separator are the header when a data row follows that separator. A separator can stand between any two rows; the data rows on both sides alternate their backgrounds as if it were not there.
-- Columns that `org-table-shrink` narrows are read as they are displayed.
+- Columns that `org-table-shrink` narrows are read as they are displayed, and the table is drawn again when a column is shrunk or expanded, for example with `C-c TAB` (`org-table-toggle-column-width`).
 - Text hidden by folding is read as if it were shown, so a table drawn while its heading was folded has the right widths when the heading is unfolded.
 - Table.el tables, `#+TBLFM` lines, and lines starting with `|` in a source block are not drawn.
 - A table whose `#+ATTR_ORG` sets `:pretty-tables` to nil is not drawn:

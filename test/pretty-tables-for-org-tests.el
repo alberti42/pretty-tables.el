@@ -196,6 +196,40 @@ Font-lock and `pretty-tables-for-org-mode' are on, the table width is
                      "|------+-------|"
                      "| one  | Emacs |")))))
 
+(ert-deftest pretty-tables-for-org-test-shrink ()
+  "Shrinking or expanding a column draws the table again."
+  (pretty-tables-for-org-tests--with-buffer
+      "* Title\n\n| <5> | b |\n| hello wide world | xyz |\n"
+    (search-forward "|")
+    (org-table-shrink)
+    (jit-lock-fontify-now)
+    (should (equal (pretty-tables-for-org-tests--rows)
+                   '("| <5>  … | b   |"
+                     "| hello… | xyz |")))
+    (org-table-toggle-column-width "2")
+    (jit-lock-fontify-now)
+    (should (equal (pretty-tables-for-org-tests--rows)
+                   '("| <5>  … | … |"
+                     "| hello… | … |")))
+    (org-table-expand)
+    (jit-lock-fontify-now)
+    (should (equal (pretty-tables-for-org-tests--rows)
+                   '("| <5>              | b   |"
+                     "| hello wide world | xyz |")))))
+
+(ert-deftest pretty-tables-for-org-test-shrink-edit ()
+  "Editing a table with shrunk columns draws them shrunk."
+  (pretty-tables-for-org-tests--with-buffer
+      "* Title\n\n| <5> | b |\n| hello wide world | xyz |\n"
+    (search-forward "|")
+    (org-table-shrink)
+    (search-forward "b")
+    (org-table-insert-column)
+    (jit-lock-fontify-now)
+    (should (equal (pretty-tables-for-org-tests--rows)
+                   '("| <5>  … |   | b   |"
+                     "| hello… |   | xyz |")))))
+
 (ert-deftest pretty-tables-for-org-test-table-face ()
   "`org-table' is the last face of every drawn row."
   (pretty-tables-for-org-tests--with-buffer
