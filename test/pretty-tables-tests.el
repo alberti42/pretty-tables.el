@@ -170,6 +170,22 @@ End.
     (should (equal (pretty-tables--column-widths '(10 30 5) 30)
                    '(8 8 5)))))
 
+(ert-deftest pretty-tables-test-column-widths-minimums ()
+  "Columns with a minimum are narrowed first, and not below it."
+  ;; 2 columns take 7 columns of pipes and spaces.
+  (let ((pretty-tables-min-column-width 8))
+    (dolist (case '((100 (30 50)) (70 (30 33)) (60 (30 23)) (40 (13 20))
+                    (20 (8 20))))
+      (should (equal (pretty-tables--column-widths '(30 50) (car case)
+                                                   '(nil 20))
+                     (cadr case))))
+    ;; A minimum below `pretty-tables-min-column-width' is the floor.
+    (should (equal (pretty-tables--column-widths '(30 50) 20 '(nil 5))
+                   '(8 5)))
+    ;; A column narrower than its minimum keeps its width.
+    (should (equal (pretty-tables--column-widths '(30 10) 20 '(nil 20))
+                   '(8 10)))))
+
 (ert-deftest pretty-tables-test-break-word ()
   "A word is split into pieces no wider than the width."
   (should (equal (pretty-tables--break-word "abcdefgh" 3)
@@ -358,6 +374,21 @@ There `font-lock-fontified' is nil, and `font-lock-flush' does nothing."
                    '("| a | b            |"
                      "|---|--------------|"
                      "| x | one two      |\n|   | three four   |")))))
+
+(ert-deftest pretty-tables-test-min-widths ()
+  "A column with a minimum width is narrowed first, down to it."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n| aaaa bbbb cccc | dddd eeee ffff |\n"
+    (setq-local pretty-tables-width 30)
+    (cl-letf* ((tables (symbol-function 'pretty-tables-tests--tables))
+               ((symbol-function 'pretty-tables-tests--tables)
+                (lambda (beg end)
+                  (mapcar (lambda (table)
+                            (plist-put table :min-widths '(9 nil)))
+                          (funcall tables beg end)))))
+      (jit-lock-fontify-now)
+      (should (equal (pretty-tables-tests--rows)
+                     '("| aaaa bbbb | dddd eeee ffff |\n| cccc      |                |"))))))
 
 (ert-deftest pretty-tables-test-invisible-text ()
   "Text font-lock makes invisible takes no room."

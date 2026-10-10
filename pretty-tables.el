@@ -208,18 +208,38 @@ adaptor has none."
 
 ;;; Layout
 
-(defun pretty-tables--column-widths (natural target)
+(defun pretty-tables--narrow-widest (widths floors)
+  "Narrow by one the widest of WIDTHS that is wider than its floor.
+FLOORS has an entry per column, a width or nil; a column whose entry
+is nil is not narrowed.  WIDTHS is changed in place.  Return nil when
+no column is wider than its floor."
+  (let (best)
+    (seq-do-indexed (lambda (floor i)
+                      (when (and floor (> (nth i widths) floor)
+                                 (or (null best)
+                                     (> (nth i widths) (nth best widths))))
+                        (setq best i)))
+                    floors)
+    (when best
+      (setf (nth best widths) (1- (nth best widths))))))
+
+(defun pretty-tables--column-widths (natural target &optional minimums)
   "Narrow the NATURAL column widths until the table fits TARGET columns.
-A table with N columns of widths W takes sum(W) + 3N + 1 columns.  The
-widest column is narrowed by one until the table fits or every column
-is at `pretty-tables-min-column-width'."
+A table with N columns of widths W takes sum(W) + 3N + 1 columns.
+MINIMUMS has an entry per column, a width or nil.  First the widest
+column with an entry is narrowed by one, until the table fits or each
+such column is at its entry.  Then the widest column is narrowed by
+one until the table fits or every column is at its entry or, without
+one, at `pretty-tables-min-column-width'."
   (let* ((widths (copy-sequence natural))
          (n (length widths))
-         (floor pretty-tables-min-column-width))
-    (while (and (> (+ (apply #'+ widths) (* 3 n) 1) target)
-                (seq-some (lambda (w) (> w floor)) widths))
-      (let ((i (seq-position widths (apply #'max widths))))
-        (setf (nth i widths) (1- (nth i widths)))))
+         (minimums (mapcar (lambda (i) (nth i minimums))
+                           (number-sequence 0 (1- n))))
+         (floors (mapcar (lambda (m) (or m pretty-tables-min-column-width))
+                         minimums)))
+    (dolist (floors (list minimums floors))
+      (while (and (> (+ (apply #'+ widths) (* 3 n) 1) target)
+                  (pretty-tables--narrow-widest widths floors))))
     widths))
 
 (defun pretty-tables--break-word (word width)
@@ -384,7 +404,8 @@ starting at REVEALED is left as raw text."
                                            data)))
                           (number-sequence 0 (1- ncols))))
          (widths (pretty-tables--column-widths
-                  natural (or pretty-tables-width fill-column)))
+                  natural (or pretty-tables-width fill-column)
+                  (plist-get table :min-widths)))
          (alignments (let ((a (plist-get table :alignments)))
                        (mapcar (lambda (i) (or (nth i a) 'left))
                                (number-sequence 0 (1- ncols)))))
@@ -587,7 +608,11 @@ A table is a plist with these properties:
 `:rows'         The rows, in buffer order.
 `:alignments'   A list with an alignment per column: `left', `right'
                 or `center'.  A column with none is `left'.
-`:raw'          Non-nil to show the table as its text: it is not
+`:min-widths'   A list with a width or nil per column, or nil.  When
+                the table is wider than `pretty-tables-width', the
+                columns with a width are narrowed first, and none is
+                narrowed below its width.
+`:raw'         Non-nil to show the table as its text: it is not
                 drawn, and its rows drawn before are shown as text.
                 `:rows' and `:alignments' are then not used.
 

@@ -14,6 +14,10 @@ to `X.Y.Z`.
 
 ### Added
 
+- The table property `:min-widths` of `pretty-tables-enable`: a list
+  with a width or nil per column.  When the table is wider than
+  `pretty-tables-width`, the columns with a width are narrowed first,
+  and none is narrowed below its width.
 - The options `pretty-tables-width`, `pretty-tables-min-column-width`,
   `pretty-tables-stripe-rows`, `pretty-tables-row-lines` and
   `pretty-tables-reveal` are safe as file-local and directory-local
