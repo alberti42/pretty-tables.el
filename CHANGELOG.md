@@ -18,6 +18,9 @@ to `X.Y.Z`.
   with a width or nil per column.  When the table is wider than
   `pretty-tables-width`, the columns with a width are narrowed first,
   and none is narrowed below its width.
+- The adaptor key `:options` of `pretty-tables-enable`: a list of
+  variables the adaptor's tables depend on.  Setting one draws the
+  tables again, as setting `pretty-tables-width` does.
 - The options `pretty-tables-width`, `pretty-tables-min-column-width`,
   `pretty-tables-stripe-rows`, `pretty-tables-row-lines` and
   `pretty-tables-reveal` are safe as file-local and directory-local

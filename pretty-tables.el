@@ -548,7 +548,9 @@ Setting one draws the tables again; see
 `pretty-tables--option-changed'.")
 
 (defun pretty-tables--option-changed (_symbol _value operation where)
-  "Draw the tables again after one of `pretty-tables--options' is set.
+  "Draw the tables again after an option of the drawing is set.
+The options are `pretty-tables--options' and the `:options' of the
+adaptors.
 A variable watcher: OPERATION is how the variable changed, and WHERE
 is the buffer whose local value changed, or nil for the default value.
 The tables are drawn again in WHERE, or in every buffer when the
@@ -601,6 +603,9 @@ An adaptor calls this from its minor mode.  ADAPTOR is a plist:
               the first.  The default is the `line-prefix' of the
               row's line followed by the text from the start of
               that line to the row.
+`:options'    A list of variables the adaptor's tables depend on.
+              Setting one draws the tables again, as setting
+              `pretty-tables-width' does.
 
 A table is a plist with these properties:
 
@@ -637,7 +642,8 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (add-hook 'jit-lock-functions #'pretty-tables--fontify 90 t)
   (add-hook 'post-command-hook #'pretty-tables--reveal nil t)
   ;; `add-variable-watcher' adds a function only once.
-  (dolist (option pretty-tables--options)
+  (dolist (option (append pretty-tables--options
+                          (plist-get adaptor :options)))
     (add-variable-watcher option #'pretty-tables--option-changed))
   (add-hook 'enable-theme-functions #'pretty-tables--theme-changed)
   (add-hook 'disable-theme-functions #'pretty-tables--theme-changed)

@@ -491,6 +491,20 @@ is read, as they do when jit-lock fontifies a window in chunks."
                              (pretty-tables-tests--faces row)))
                           (pretty-tables-tests--row-strings)))))
 
+(defvar pretty-tables-tests--option nil
+  "An option of the test adaptor, given in its `:options'.")
+
+(ert-deftest pretty-tables-test-adaptor-option-redraws ()
+  "Setting a variable of the adaptor's `:options' draws the table again."
+  (pretty-tables-tests--with-buffer "Title\n\n| a | b |\n"
+    (pretty-tables-enable :tables #'pretty-tables-tests--tables
+                          :separator #'pretty-tables-tests--separator
+                          :options '(pretty-tables-tests--option))
+    (jit-lock-fontify-now)
+    (should (get-text-property (point-min) 'fontified))
+    (setq-local pretty-tables-tests--option t)
+    (should-not (get-text-property (point-min) 'fontified))))
+
 ;;; Stripes and row lines
 
 (ert-deftest pretty-tables-test-stripes ()
