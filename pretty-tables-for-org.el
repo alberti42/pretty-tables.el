@@ -94,6 +94,12 @@ fits keeps the natural widths of its columns."
   :safe #'booleanp
   :group 'pretty-tables)
 
+;; Added when the file loads, not in the `:options' of the mode, so that
+;; the tables of an adaptor that calls `pretty-tables-for-org-table' are
+;; drawn again too when the option is set.
+(add-variable-watcher 'pretty-tables-for-org-width-cookies
+                      #'pretty-tables--option-changed)
+
 ;;; Reading the buffer
 
 (defun pretty-tables-for-org--row-cells (beg end)
@@ -328,8 +334,7 @@ command moved point onto it."
          :separator #'pretty-tables-for-org-draw-separator
          :face 'org-table
          :invisible #'pretty-tables-for-org--invisible-p
-         :follow #'org-open-at-point
-         :options '(pretty-tables-for-org-width-cookies)))
+         :follow #'org-open-at-point))
     (remove-hook 'jit-lock-after-change-extend-region-functions
                  #'pretty-tables-for-org--extend-region t)
     (pretty-tables-disable)))
@@ -370,11 +375,16 @@ advice of `org-table--shrink-columns'."
             #'pretty-tables-for-org--columns-shrunk)
 
 (defun pretty-tables-for-org-unload-function ()
-  "Remove the advices of `org-table-expand' and `org-table--shrink-columns'.
-Called by `unload-feature'; nil means unloading continues."
+  "Remove the advices and the variable watcher the file added.
+The advices are those of `org-table-expand' and
+`org-table--shrink-columns', the watcher that of
+`pretty-tables-for-org-width-cookies'.  Called by `unload-feature';
+nil means unloading continues."
   (advice-remove 'org-table-expand #'pretty-tables-for-org--columns-expanded)
   (advice-remove 'org-table--shrink-columns
                  #'pretty-tables-for-org--columns-shrunk)
+  (remove-variable-watcher 'pretty-tables-for-org-width-cookies
+                           #'pretty-tables--option-changed)
   nil)
 
 (provide 'pretty-tables-for-org)

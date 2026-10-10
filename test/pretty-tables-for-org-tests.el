@@ -276,6 +276,18 @@ Its floor is the width Org shows it at when shrunk: 10 and `…'."
                    '("| <10>      … | b                      |"
                      "| alpha beta… | one two three four     |\n|             | five                   |")))))
 
+(ert-deftest pretty-tables-for-org-test-width-cookies-watched ()
+  "Setting `pretty-tables-for-org-width-cookies' draws the tables again.
+The watcher is added when the file loads, so it covers a buffer whose
+adaptor calls `pretty-tables-for-org-table' without the mode."
+  (should (memq #'pretty-tables--option-changed
+                (get-variable-watchers 'pretty-tables-for-org-width-cookies)))
+  (pretty-tables-for-org-tests--with-buffer
+      pretty-tables-for-org-tests--cookie-table
+    (should (get-text-property (point-min) 'fontified))
+    (setq-local pretty-tables-for-org-width-cookies nil)
+    (should-not (get-text-property (point-min) 'fontified))))
+
 (ert-deftest pretty-tables-for-org-test-safe-local-variables ()
   "The option is safe as a file-local variable with a boolean value."
   (should (safe-local-variable-p 'pretty-tables-for-org-width-cookies nil))
