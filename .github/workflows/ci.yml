@@ -1,5 +1,7 @@
 # Byte-compilation, checkdoc and the ERT suite, on every push to main and
-# every pull request.
+# develop and every pull request.  The jobs are the same on both branches:
+# the packages require only Emacs and `pretty-tables', so no floor version
+# of another package is checked.
 #
 # The tests of the Markdown adaptor need the `markdown' and `markdown-inline'
 # tree-sitter grammars and skip themselves without them.  A run that skipped
@@ -16,7 +18,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
 concurrency:
