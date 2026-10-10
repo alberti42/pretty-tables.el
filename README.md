@@ -174,6 +174,12 @@ The face `pretty-tables-header-row` covers the whole header row, pipes included,
 - In a narrowed buffer with `font-lock-dont-widen` set, a table that extends past the accessible portion is not drawn.
 - The row point is on is shown raw, and `org-table-align` keeps that row aligned with the other raw rows, not with the drawn ones.
 
+## Images in cells
+
+A package that shows text as an image, with an overlay whose `display` is the image, can have the image drawn in a table too. Its overlay gives the image's width in pixels in the property `pretty-tables-image-width`. The image then takes the fewest columns that hold that width, and its column is not narrowed below them. Without the property, or on a display that cannot show images, the cell shows the text under the overlay.
+
+A table is drawn when jit-lock reaches it, so an image that appears or changes after that is not in the drawing. The package then calls `jit-lock-refontify` on the image's text, when an overlay with the property `pretty-tables` covers it, and the table is drawn again at the next redisplay. [latex-to-svg](https://github.com/alberti42/latex-to-svg) does both for its equations.
+
 ## Hiding link markup with spaces
 
 A configuration that hides link markup with `(space :width N)`, to keep raw tables aligned, makes that markup count as N spaces here. Such a configuration should use `invisible` while a mode is on.

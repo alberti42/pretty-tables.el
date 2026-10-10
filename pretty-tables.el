@@ -159,13 +159,38 @@ function again.")
 
 ;;; Reading the buffer
 
+(defun pretty-tables--image-string (image width pos)
+  "Return the string that shows IMAGE, WIDTH pixels wide, in a cell.
+The string takes N columns, the fewest that hold WIDTH pixels.  Its
+first character shows IMAGE; the others, N - 1 characters and a
+zero-width space, show the space from the image to N columns, which
+the display engine computes from IMAGE itself.  Every character has
+POS in `pretty-tables-pos' and (N) in `pretty-tables-image';
+`pretty-tables--break-word' does not split the string."
+  (let* ((font (default-font-width))
+         (n (max 1 (ceiling width font)))
+         (string (concat (make-string n ?x) "\u200b")))
+    (put-text-property 0 1 'display image string)
+    (put-text-property 1 (length string) 'display
+                       `(space :width (- (,(* n font)) (1 . ,image)))
+                       string)
+    (add-text-properties 0 (length string)
+                         (list 'pretty-tables-pos pos
+                               ;; A new list for each image, so that two
+                               ;; images side by side stay apart.
+                               'pretty-tables-image (list n))
+                         string)
+    string))
+
 (defun pretty-tables--visible-string (beg end)
   "Return the text between BEG and END as it is displayed.
 Invisible characters are dropped and a `display' string replaces the
-text it covers.  Whether a character is invisible is decided by the
-adaptor's `:invisible' function, by default `invisible-p'.  Each
-character carries the buffer position it came from in the
-`pretty-tables-pos' property."
+text it covers.  A `display' image whose `pretty-tables-image-width'
+property gives its width in pixels is shown as an image, on a
+graphical display; see `pretty-tables--image-string'.  Whether a
+character is invisible is decided by the adaptor's `:invisible'
+function, by default `invisible-p'.  Each character carries the buffer
+position it came from in the `pretty-tables-pos' property."
   (let ((invisible (or (plist-get pretty-tables--adaptor :invisible)
                        #'invisible-p))
         (pos beg) parts)
@@ -176,9 +201,14 @@ character carries the buffer position it came from in the
       (let ((next (min (next-single-char-property-change pos 'invisible nil end)
                        (next-single-property-change pos 'invisible nil end)
                        (next-single-char-property-change pos 'display nil end)))
-            (display (get-char-property pos 'display)))
+            (display (get-char-property pos 'display))
+            (image-width (get-char-property pos 'pretty-tables-image-width)))
         (cond
          ((funcall invisible pos))
+         ((and (eq (car-safe display) 'image)
+               (numberp image-width)
+               (display-images-p))
+          (push (pretty-tables--image-string display image-width pos) parts))
          ((stringp display)
           (push (propertize (copy-sequence display) 'pretty-tables-pos pos)
                 parts))
@@ -223,35 +253,68 @@ no column is wider than its floor."
     (when best
       (setf (nth best widths) (1- (nth best widths))))))
 
-(defun pretty-tables--column-widths (natural target &optional minimums)
+(defun pretty-tables--column-widths (natural target &optional minimums images)
   "Narrow the NATURAL column widths until the table fits TARGET columns.
 A table with N columns of widths W takes sum(W) + 3N + 1 columns.
 MINIMUMS has an entry per column, a width or nil.  First the widest
 column with an entry is narrowed by one, until the table fits or each
 such column is at its entry.  Then the widest column is narrowed by
 one until the table fits or every column is at its entry or, without
-one, at `pretty-tables-min-column-width'."
+one, at `pretty-tables-min-column-width'.  IMAGES has an entry per
+column, the width of its widest image or nil, and no column is
+narrowed below it."
   (let* ((widths (copy-sequence natural))
          (n (length widths))
-         (minimums (mapcar (lambda (i) (nth i minimums))
-                           (number-sequence 0 (1- n))))
-         (floors (mapcar (lambda (m) (or m pretty-tables-min-column-width))
-                         minimums)))
+         (images (mapcar (lambda (i) (or (nth i images) 0))
+                         (number-sequence 0 (1- n))))
+         (minimums (seq-mapn (lambda (m image) (and m (max m image)))
+                             (mapcar (lambda (i) (nth i minimums))
+                                     (number-sequence 0 (1- n)))
+                             images))
+         (floors (seq-mapn (lambda (m image)
+                             (or m (max pretty-tables-min-column-width image)))
+                           minimums images)))
     (dolist (floors (list minimums floors))
       (while (and (> (+ (apply #'+ widths) (* 3 n) 1) target)
                   (pretty-tables--narrow-widest widths floors))))
     widths))
 
 (defun pretty-tables--break-word (word width)
-  "Split WORD into pieces no wider than WIDTH."
+  "Split WORD into pieces no wider than WIDTH.
+An image (see `pretty-tables--image-string') is not split: a piece
+ends before it, or, when it starts the piece, after it."
   (let (pieces)
     (while (> (string-width word) width)
-      (let ((head (truncate-string-to-width word width)))
-        (when (string-empty-p head)
-          (setq head (substring word 0 1)))
-        (push head pieces)
-        (setq word (substring word (length head)))))
+      (let* ((cut (length (truncate-string-to-width word width)))
+             (image (and (< 0 cut (length word))
+                         (get-text-property cut 'pretty-tables-image word))))
+        (when (and image
+                   (eq image (get-text-property (1- cut) 'pretty-tables-image
+                                                word)))
+          (setq cut (or (previous-single-property-change
+                         cut 'pretty-tables-image word)
+                        0))
+          (when (= cut 0)
+            (setq cut (next-single-property-change
+                       0 'pretty-tables-image word (length word)))))
+        (when (= cut 0)
+          (setq cut 1))
+        (push (substring word 0 cut) pieces)
+        (setq word (substring word cut))))
     (nreverse (cons word pieces))))
+
+(defun pretty-tables--widest-image (paragraph)
+  "Return the width of the widest image in PARAGRAPH, or 0.
+The images are those of `pretty-tables--image-string'."
+  (let ((pos 0) (widest 0))
+    (while (setq pos (text-property-not-all pos (length paragraph)
+                                            'pretty-tables-image nil
+                                            paragraph))
+      (setq widest (max widest (car (get-text-property
+                                     pos 'pretty-tables-image paragraph)))
+            pos (next-single-property-change pos 'pretty-tables-image
+                                             paragraph (length paragraph))))
+    widest))
 
 (defun pretty-tables--wrap (paragraph width)
   "Word-wrap PARAGRAPH into lines no wider than WIDTH.
@@ -403,9 +466,17 @@ starting at REVEALED is left as raw text."
                                                             (nth i cells))))
                                            data)))
                           (number-sequence 0 (1- ncols))))
+         (images (mapcar (lambda (i)
+                           (apply #'max 0
+                                  (mapcar (lambda (cells)
+                                            (apply #'max 0
+                                                   (mapcar #'pretty-tables--widest-image
+                                                           (nth i cells))))
+                                          data)))
+                         (number-sequence 0 (1- ncols))))
          (widths (pretty-tables--column-widths
                   natural (or pretty-tables-width fill-column)
-                  (plist-get table :min-widths)))
+                  (plist-get table :min-widths) images))
          (alignments (let ((a (plist-get table :alignments)))
                        (mapcar (lambda (i) (or (nth i a) 'left))
                                (number-sequence 0 (1- ncols)))))

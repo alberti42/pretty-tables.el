@@ -237,6 +237,88 @@ End.
                              (number-sequence 0 (1- (length s))))
                      '(1 3 3 4 4 4 5 6))))))
 
+(defconst pretty-tables-tests--image '(image :type svg :data "<svg/>")
+  "An image spec; batch mode cannot show it, so it is never loaded.")
+
+(defmacro pretty-tables-tests--with-images (&rest body)
+  "Run BODY as on a graphical display whose font is 10 pixels wide."
+  (declare (indent 0) (debug t))
+  `(cl-letf (((symbol-function 'display-images-p) #'always)
+             ((symbol-function 'default-font-width) (lambda () 10)))
+     ,@body))
+
+(ert-deftest pretty-tables-test-visible-string-image ()
+  "An image overlay with a width takes the columns that hold it."
+  (with-temp-buffer
+    (insert "a $x$ b")
+    (let ((ov (make-overlay 3 6)))
+      (overlay-put ov 'display pretty-tables-tests--image)
+      (overlay-put ov 'pretty-tables-image-width 25)
+      (pretty-tables-tests--with-images
+        (let ((s (pretty-tables--visible-string 1 8)))
+          ;; 25 pixels take 3 columns of 10 pixels.
+          (should (equal (substring-no-properties s) "a xxx\u200b b"))
+          (should (= (string-width s) 7))
+          (should (eq (get-text-property 2 'display s)
+                      pretty-tables-tests--image))
+          (should (equal (get-text-property 3 'display s)
+                         `(space :width (- (30) (1 . ,pretty-tables-tests--image)))))
+          (should (eq (get-text-property 3 'display s)
+                      (get-text-property 5 'display s)))
+          (should (equal (mapcar (lambda (i)
+                                   (get-text-property i 'pretty-tables-pos s))
+                                 (number-sequence 0 (1- (length s))))
+                         '(1 2 3 3 3 3 6 7)))))
+      ;; Without a graphical display, the text is read.
+      (should (equal (substring-no-properties
+                      (pretty-tables--visible-string 1 8))
+                     "a $x$ b"))
+      ;; Without a width, the text is read.
+      (overlay-put ov 'pretty-tables-image-width nil)
+      (pretty-tables-tests--with-images
+        (should (equal (substring-no-properties
+                        (pretty-tables--visible-string 1 8))
+                       "a $x$ b"))))))
+
+(ert-deftest pretty-tables-test-break-word-image ()
+  "A word is not broken inside an image."
+  (pretty-tables-tests--with-images
+    (let* ((image (pretty-tables--image-string pretty-tables-tests--image 30 1))
+           (word (concat "ab" image "cd")))
+      ;; A piece ends before the image.
+      (should (equal (mapcar #'substring-no-properties
+                             (pretty-tables--break-word word 4))
+                     '("ab" "xxx\u200bc" "d")))
+      ;; An image wider than the width starting a piece is kept whole.
+      (should (equal (mapcar #'substring-no-properties
+                             (pretty-tables--break-word (concat image "cd") 2))
+                     '("xxx\u200b" "cd"))))))
+
+(ert-deftest pretty-tables-test-image-floor ()
+  "No column is narrowed below its widest image."
+  (let ((pretty-tables-min-column-width 8))
+    (should (equal (pretty-tables--column-widths '(30 30) 30 nil '(nil 12))
+                   '(11 12)))
+    ;; With a minimum width, the image is the floor when it is wider.
+    (should (equal (pretty-tables--column-widths '(30 30) 30 '(nil 5) '(nil 12))
+                   '(11 12)))))
+
+(ert-deftest pretty-tables-test-image-drawn ()
+  "An image in a cell is drawn, and its column is not narrowed below it."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n| aaaa bbbb cccc | $x$ |\n"
+    (let ((ov (make-overlay (- (point-max) 6) (- (point-max) 3))))
+      (should (equal (buffer-substring (overlay-start ov) (overlay-end ov))
+                     "$x$"))
+      (overlay-put ov 'display pretty-tables-tests--image)
+      (overlay-put ov 'pretty-tables-image-width 95)
+      (setq-local pretty-tables-width 20)
+      (pretty-tables-tests--with-images
+        (jit-lock-refontify)
+        (jit-lock-fontify-now))
+      (should (equal (pretty-tables-tests--rows)
+                     '("| aaaa     | xxxxxxxxxx\u200b |\n| bbbb     |            |\n| cccc     |            |"))))))
+
 (ert-deftest pretty-tables-test-visible-string-adaptor-invisible ()
   "The adaptor's `:invisible' function decides what takes no room."
   (with-temp-buffer
