@@ -221,8 +221,10 @@ position it came from in the `pretty-tables-pos' property."
         (cond
          ((funcall invisible pos))
          ((and (eq (car-safe display) 'image)
-               (setq image-width (pretty-tables--image-width display))
-               (display-images-p))
+               ;; First: an Emacs that cannot show images may not define
+               ;; `image-scaling-factor'.
+               (display-images-p)
+               (setq image-width (pretty-tables--image-width display)))
           (push (pretty-tables--image-string display image-width pos) parts))
          ((stringp display)
           ;; A newline would end the drawn row's screen line inside a

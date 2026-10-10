@@ -286,7 +286,9 @@ Batch mode cannot show it, so it is never loaded.")
   (should (equal (pretty-tables--image-width '(image :width 100 :scale 2.0))
                  200.0))
   (should (equal (pretty-tables--image-width '(image :width 100)) 100))
-  (let ((image-scaling-factor 1.5))
+  ;; `image-scaling-factor' is not defined in an Emacs without images.
+  (cl-letf (((symbol-function 'image-compute-scaling-factor)
+             (lambda (&optional _scaling) 1.5)))
     (should (equal (pretty-tables--image-width
                     '(image :width 100 :scale default))
                    150.0)))
