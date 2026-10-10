@@ -12,6 +12,8 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-10
+
 ### Added
 
 - The table property `:min-widths` of `pretty-tables-enable`: a list
@@ -35,6 +37,13 @@ to `X.Y.Z`.
   `pretty-tables-stripe-rows`, `pretty-tables-row-lines` and
   `pretty-tables-reveal` are safe as file-local and directory-local
   variables when their value has the option's type.
+
+### Changed
+
+- A drawn row is the `before-string` of its overlay, and a `display` of
+  `""` hides the row's text; the drawn row was the overlay's `display`.
+  Emacs ignores the `display` properties inside a string that is itself a
+  `display`, so an image in a cell showed as the text under it.
 
 ### Fixed
 
@@ -180,7 +189,8 @@ to `X.Y.Z`.
   last, with the underline of the face `markdown-table-view-row-line`. It is
   off by default.
 
-[Unreleased]: https://github.com/alberti42/pretty-tables.el/compare/v0.4.0...main
+[Unreleased]: https://github.com/alberti42/pretty-tables.el/compare/v0.5.0...main
+[0.5.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.5.0
 [0.4.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.4.0
 [0.3.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.3.0
 [0.2.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.2.0

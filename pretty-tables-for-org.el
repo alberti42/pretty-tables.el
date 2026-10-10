@@ -6,8 +6,8 @@
 ;; Maintainer: Andrea Alberti <a.alberti82@gmail.com>
 ;; Assisted-by: Claude:claude-opus-5-5
 ;; URL: https://github.com/alberti42/pretty-tables.el
-;; Version: 0.4.0
-;; Package-Requires: ((emacs "31.1") (pretty-tables "0.4.0"))
+;; Version: 0.5.0
+;; Package-Requires: ((emacs "31.1") (pretty-tables "0.5.0"))
 ;; Keywords: text, wp, convenience, outlines
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
