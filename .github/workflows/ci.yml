@@ -101,3 +101,27 @@ jobs:
         run: |
           rm -f *.elc
           make test
+
+  # `pretty-tables-for-org' advises `org-table--shrink-columns', which is
+  # internal to Org, and `org-table-expand'; test/fixtures/org-table-shrink.el
+  # holds a copy of them.  On every Emacs of the matrix of `check', this
+  # compares them with the copy and prints a diff when they differ, or an
+  # error when one is gone.  A change in Org is no failure of this package,
+  # so the job may fail.  Add each new Emacs release to both matrices.
+  org-table-shrink:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        emacs_version: ['31.1', 'snapshot']
+    name: Org org-table.el vs. our copy, Emacs ${{ matrix.emacs_version }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs_version }}
+
+      - name: Compare org-table--shrink-columns and org-table-expand
+        run: emacs -Q -batch -l .github/scripts/org-table-shrink-check.el
