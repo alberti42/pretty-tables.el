@@ -33,8 +33,9 @@
 ;; adaptor for `markdown-ts-mode', `pretty-tables-for-org' the one for
 ;; `org-mode'.
 ;;
-;; Each table row is covered by an overlay whose `display' property is a
-;; string drawing the row with aligned columns.  Column widths come from
+;; Each table row is covered by an overlay whose `before-string' draws
+;; the row with aligned columns, and whose `display' of "" hides the
+;; row's text.  Column widths come from
 ;; the text a reader sees in each cell: characters that are invisible
 ;; (for example hidden link markup) take no room.  When the table is
 ;; wider than `pretty-tables-width', the widest columns are narrowed and
@@ -442,12 +443,23 @@ is put in the prefix as the `display' of a space."
                   (t (propertize " " 'display line)))
             (buffer-substring bol pos))))
 
+(defun pretty-tables--show-drawn (ov drawn)
+  "Show the row overlay OV drawn when DRAWN is non-nil, else as its text.
+The drawn row is the overlay's `before-string', its string in
+`pretty-tables-string', and a `display' of \"\" hides the text of
+the row.  A `display' string would not do: Emacs ignores the
+`display' properties inside a string that is itself a `display', and
+an image in a cell is one (see `pretty-tables--image-string')."
+  (overlay-put ov 'display (and drawn ""))
+  (overlay-put ov 'before-string
+               (and drawn (overlay-get ov 'pretty-tables-string))))
+
 (defun pretty-tables--render-table (table revealed)
   "Cover each row of TABLE with an overlay that draws it aligned.
 TABLE is a table as `pretty-tables-enable' describes it.  The row
 starting at REVEALED is left as raw text."
   ;; The old overlays go first: the cells are read with
-  ;; `get-char-property', which would return their `display' strings.
+  ;; `get-char-property', which would return their `display' of "".
   (pretty-tables--delete-overlays (plist-get table :beg) (plist-get table :end))
   (let* ((rows (plist-get table :rows))
          (data (mapcar (lambda (row)
@@ -515,13 +527,16 @@ starting at REVEALED is left as raw text."
                                       'pointer 'arrow
                                       'line-prefix prefix
                                       'wrap-prefix prefix)
-                                string))
+                                string)
+           ;; Point at the start of a drawn row shows the cursor at the
+           ;; start of the string, not after it.
+           (put-text-property 0 1 'cursor t string))
          (overlay-put ov 'pretty-tables t)
          (overlay-put ov 'pretty-tables-string string)
          (overlay-put ov 'evaporate t)
          (if (eql beg revealed)
              (setq pretty-tables--revealed ov)
-           (overlay-put ov 'display string))))
+           (pretty-tables--show-drawn ov t))))
      rows data)))
 
 (defun pretty-tables--fontify (beg end)
@@ -575,9 +590,9 @@ property, a row point moved onto stays drawn."
       (setq ov nil))
     (unless (eq ov old)
       (when (and old (overlay-buffer old))
-        (overlay-put old 'display (overlay-get old 'pretty-tables-string)))
+        (pretty-tables--show-drawn old t))
       (when ov
-        (overlay-put ov 'display nil))
+        (pretty-tables--show-drawn ov nil))
       (setq pretty-tables--revealed ov))))
 
 (defun pretty-tables--follow-link ()
