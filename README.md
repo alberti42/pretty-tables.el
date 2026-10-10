@@ -129,7 +129,7 @@ With straight.el, from a local clone, one recipe per package, `pretty-tables` fi
 
 ## Options
 
-The options and faces belong to `pretty-tables`, so they apply to both modes.
+The options below and the faces belong to `pretty-tables`, so they apply to both modes. `pretty-tables-for-org-width-cookies` belongs to `pretty-tables-for-org`; see [Org tables](#org-tables).
 
 |Option                          |Default|Meaning                                                                      |
 |--------------------------------|-------|-----------------------------------------------------------------------------|
@@ -162,6 +162,7 @@ The face `pretty-tables-header-row` covers the whole header row, pipes included,
 - A column is aligned as `org-table-align` aligns it: by the first `<l>`, `<r>` or `<c>` cookie in it, or else to the right when the share of its non-empty cells that match `org-table-number-regexp` is at least `org-table-number-fraction`. A row of cookies is drawn as a data row.
 - The rows above the first separator are the header when a data row follows that separator. A separator can stand between any two rows; the data rows on both sides alternate their backgrounds as if it were not there.
 - Columns that `org-table-shrink` narrows are read as they are displayed, and the table is drawn again when a column is shrunk or expanded, for example with `C-c TAB` (`org-table-toggle-column-width`).
+- When a table is wider than `pretty-tables-width`, the columns with a `<N>`, `<lN>`, `<rN>` or `<cN>` cookie are narrowed first, and none is narrowed below the width Org shows it at when the column is shrunk: N characters and `org-table-shrunk-column-indicator`. A table that fits keeps the natural widths of its columns. Setting `pretty-tables-for-org-width-cookies` (default `t`) to nil turns this off; setting it draws the tables again, and it is safe as a file-local variable.
 - Text hidden by folding is read as if it were shown, so a table drawn while its heading was folded has the right widths when the heading is unfolded.
 - Table.el tables, `#+TBLFM` lines, and lines starting with `|` in a source block are not drawn.
 - A table whose `#+ATTR_ORG` sets `:pretty-tables` to nil is not drawn:

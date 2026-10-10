@@ -46,11 +46,16 @@
 ;; data row.  Columns that `org-table-shrink' narrows are read as they
 ;; are displayed, and the table is drawn again when a column is shrunk
 ;; or expanded; for that, the package advises `org-table-expand' and
-;; `org-table--shrink-columns'.  The
-;; rows above the first separator are the header
-;; when a data row follows that separator.  Table.el tables are not
-;; drawn, and neither is a table whose `#+ATTR_ORG' sets
-;; `:pretty-tables' to nil:
+;; `org-table--shrink-columns'.  When a table is wider than
+;; `pretty-tables-width', the columns with a `<N>', `<lN>', `<rN>' or
+;; `<cN>' cookie are narrowed first, and none is narrowed below the
+;; width Org shows it at when the column is shrunk: N characters and
+;; `org-table-shrunk-column-indicator'.  A table that fits keeps the
+;; natural widths of its columns.  Setting
+;; `pretty-tables-for-org-width-cookies' to nil turns this off.  The
+;; rows above the first separator are the header when a data row
+;; follows that separator.  Table.el tables are not drawn, and neither
+;; is a table whose `#+ATTR_ORG' sets `:pretty-tables' to nil:
 ;;
 ;;   #+ATTR_ORG: :pretty-tables nil
 ;;   | a | b |
@@ -76,6 +81,19 @@
 (declare-function org-export-read-attribute "ox"
                   (attribute element &optional property))
 
+;;; Options
+
+(defcustom pretty-tables-for-org-width-cookies t
+  "Non-nil means a width cookie sets which columns are narrowed first.
+When a table is wider than `pretty-tables-width', the columns with a
+`<N>', `<lN>', `<rN>' or `<cN>' cookie are narrowed first, and none
+is narrowed below the width Org shows it at when the column is shrunk:
+N characters and `org-table-shrunk-column-indicator'.  A table that
+fits keeps the natural widths of its columns."
+  :type 'boolean
+  :safe #'booleanp
+  :group 'pretty-tables)
+
 ;;; Reading the buffer
 
 (defun pretty-tables-for-org--row-cells (beg end)
@@ -95,6 +113,17 @@ bounds exclude the pipes.  The last `|' may be missing."
       (setq pipes (cdr pipes)))
     (nreverse cells)))
 
+(defun pretty-tables-for-org--cell-texts (rows)
+  "Return the trimmed text of each cell of ROWS, a list per row.
+Separator rows are left out."
+  (mapcar (lambda (row)
+            (mapcar (lambda (cell)
+                      (string-trim (buffer-substring-no-properties
+                                    (car cell) (cdr cell))))
+                    (plist-get row :cells)))
+          (seq-remove (lambda (row) (eq (plist-get row :kind) 'separator))
+                      rows)))
+
 (defun pretty-tables-for-org--alignments (rows)
   "Return the column alignments of the table whose rows are ROWS.
 Each element is `left', `right' or `center'.  A column takes the
@@ -102,14 +131,7 @@ alignment of its first `<l>', `<r>' or `<c>' cookie; a column without
 one is `right' when the share of its non-empty cells that match
 `org-table-number-regexp' is at least `org-table-number-fraction', and
 `left' otherwise.  This is the rule of `org-table-align'."
-  (let* ((texts (mapcar (lambda (row)
-                          (mapcar (lambda (cell)
-                                    (string-trim (buffer-substring-no-properties
-                                                  (car cell) (cdr cell))))
-                                  (plist-get row :cells)))
-                        (seq-remove (lambda (row)
-                                      (eq (plist-get row :kind) 'separator))
-                                    rows)))
+  (let* ((texts (pretty-tables-for-org--cell-texts rows))
          (ncols (apply #'max 0 (mapcar #'length texts))))
     (mapcar
      (lambda (i)
@@ -132,6 +154,32 @@ one is `right' when the share of its non-empty cells that match
                   'right
                 'left)))))
      (number-sequence 0 (1- ncols)))))
+
+(defun pretty-tables-for-org--min-widths (rows)
+  "Return the minimum widths of the columns of the table whose rows are ROWS.
+A column takes the width of its first `<N>', `<lN>', `<rN>' or `<cN>'
+cookie, as `org-table--shrink-columns' does: N characters and
+`org-table-shrunk-column-indicator', the width Org shows the column
+at when it is shrunk.  A column without a cookie has nil.  The value
+is nil when `pretty-tables-for-org-width-cookies' is nil or no column
+has a cookie."
+  (when pretty-tables-for-org-width-cookies
+    (let* ((texts (pretty-tables-for-org--cell-texts rows))
+           (ncols (apply #'max 0 (mapcar #'length texts)))
+           (widths
+            (mapcar
+             (lambda (i)
+               (seq-some (lambda (row)
+                           (let ((cell (or (nth i row) "")))
+                             (when (string-match
+                                    "\\`<[lrc]?\\([0-9]+\\)>\\'" cell)
+                               (max 1 (+ (string-to-number (match-string 1 cell))
+                                         (string-width
+                                          org-table-shrunk-column-indicator))))))
+                         texts))
+             (number-sequence 0 (1- ncols)))))
+      (when (seq-some #'identity widths)
+        widths))))
 
 (defun pretty-tables-for-org-table (starts)
   "Return the Org table whose rows start at STARTS.
@@ -164,6 +212,7 @@ this."
     (list :beg (car starts)
           :end (plist-get (car (last rows)) :end)
           :alignments (pretty-tables-for-org--alignments rows)
+          :min-widths (pretty-tables-for-org--min-widths rows)
           :rows rows)))
 
 (defun pretty-tables-for-org--table (beg end)
@@ -279,7 +328,8 @@ command moved point onto it."
          :separator #'pretty-tables-for-org-draw-separator
          :face 'org-table
          :invisible #'pretty-tables-for-org--invisible-p
-         :follow #'org-open-at-point))
+         :follow #'org-open-at-point
+         :options '(pretty-tables-for-org-width-cookies)))
     (remove-hook 'jit-lock-after-change-extend-region-functions
                  #'pretty-tables-for-org--extend-region t)
     (pretty-tables-disable)))

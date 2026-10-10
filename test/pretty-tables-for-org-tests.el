@@ -230,6 +230,58 @@ Font-lock and `pretty-tables-for-org-mode' are on, the table width is
                    '("| <5>  … |   | b   |"
                      "| hello… |   | xyz |")))))
 
+(defconst pretty-tables-for-org-tests--cookie-table
+  "* Title\n\n| <10> | b |\n| alpha beta gamma delta | one two three four five |\n"
+  "A table whose first column has a width cookie.")
+
+(ert-deftest pretty-tables-for-org-test-width-cookie-fits ()
+  "A table that fits keeps the natural widths of its columns."
+  (pretty-tables-for-org-tests--with-buffer
+      pretty-tables-for-org-tests--cookie-table
+    (should (equal (pretty-tables-for-org-tests--rows)
+                   '("| <10>                   | b                       |"
+                     "| alpha beta gamma delta | one two three four five |")))))
+
+(ert-deftest pretty-tables-for-org-test-width-cookie-narrowed-first ()
+  "A column with a width cookie is narrowed first, down to its cookie.
+Its floor is the width Org shows it at when shrunk: 10 and `…'."
+  (pretty-tables-for-org-tests--with-buffer
+      pretty-tables-for-org-tests--cookie-table
+    (setq-local pretty-tables-width 40)
+    (jit-lock-fontify-now)
+    (should (equal (pretty-tables-for-org-tests--rows)
+                   '("| <10>        | b                      |"
+                     "| alpha beta  | one two three four     |\n| gamma delta | five                   |")))))
+
+(ert-deftest pretty-tables-for-org-test-width-cookie-off ()
+  "With `pretty-tables-for-org-width-cookies' nil, cookies set no width."
+  (pretty-tables-for-org-tests--with-buffer
+      pretty-tables-for-org-tests--cookie-table
+    (setq-local pretty-tables-width 40)
+    (setq-local pretty-tables-for-org-width-cookies nil)
+    (jit-lock-fontify-now)
+    (should (equal (pretty-tables-for-org-tests--rows)
+                   '("| <10>             | b                 |"
+                     "| alpha beta gamma | one two three     |\n| delta            | four five         |")))))
+
+(ert-deftest pretty-tables-for-org-test-width-cookie-shrunk ()
+  "A shrunk column with a width cookie is drawn as Org shows it."
+  (pretty-tables-for-org-tests--with-buffer
+      pretty-tables-for-org-tests--cookie-table
+    (setq-local pretty-tables-width 40)
+    (search-forward "|")
+    (org-table-shrink)
+    (jit-lock-fontify-now)
+    (should (equal (pretty-tables-for-org-tests--rows)
+                   '("| <10>      … | b                      |"
+                     "| alpha beta… | one two three four     |\n|             | five                   |")))))
+
+(ert-deftest pretty-tables-for-org-test-safe-local-variables ()
+  "The option is safe as a file-local variable with a boolean value."
+  (should (safe-local-variable-p 'pretty-tables-for-org-width-cookies nil))
+  (should (safe-local-variable-p 'pretty-tables-for-org-width-cookies t))
+  (should-not (safe-local-variable-p 'pretty-tables-for-org-width-cookies 1)))
+
 (ert-deftest pretty-tables-for-org-test-table-face ()
   "`org-table' is the last face of every drawn row."
   (pretty-tables-for-org-tests--with-buffer

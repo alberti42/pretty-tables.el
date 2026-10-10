@@ -21,6 +21,12 @@ to `X.Y.Z`.
 - The adaptor key `:options` of `pretty-tables-enable`: a list of
   variables the adaptor's tables depend on.  Setting one draws the
   tables again, as setting `pretty-tables-width` does.
+- In an Org table wider than `pretty-tables-width`, the columns with a
+  `<N>`, `<lN>`, `<rN>` or `<cN>` cookie are narrowed first, and none is
+  narrowed below the width Org shows it at when the column is shrunk: N
+  characters and `org-table-shrunk-column-indicator`.  A table that fits
+  keeps the natural widths of its columns.  The option
+  `pretty-tables-for-org-width-cookies` (default t) turns this off.
 - The options `pretty-tables-width`, `pretty-tables-min-column-width`,
   `pretty-tables-stripe-rows`, `pretty-tables-row-lines` and
   `pretty-tables-reveal` are safe as file-local and directory-local
