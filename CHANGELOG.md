@@ -39,6 +39,9 @@ to `X.Y.Z`.
 
 ### Fixed
 
+- A newline in a `display` string in a cell, such as the one latex-to-svg
+  shows in the spaces around display math, is read as a space; it ended
+  the drawn row's screen line inside the cell.
 - An Org table is drawn again when a column is shrunk or expanded, for
   example with `C-c TAB` (`org-table-toggle-column-width`), and after a
   command such as `org-table-insert-column` edits a table with shrunk

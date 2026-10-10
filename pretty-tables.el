@@ -186,9 +186,10 @@ POS in `pretty-tables-pos' and (N) in `pretty-tables-image';
 (defun pretty-tables--visible-string (beg end)
   "Return the text between BEG and END as it is displayed.
 Invisible characters are dropped and a `display' string replaces the
-text it covers.  A `display' image whose `pretty-tables-image-width'
-property gives its width in pixels is shown as an image, on a
-graphical display; see `pretty-tables--image-string'.  Whether a
+text it covers, with its newlines read as spaces.  A `display' image
+whose `pretty-tables-image-width' property gives its width in pixels
+is shown as an image, on a graphical display; see
+`pretty-tables--image-string'.  Whether a
 character is invisible is decided by the adaptor's `:invisible'
 function, by default `invisible-p'.  Each character carries the buffer
 position it came from in the `pretty-tables-pos' property."
@@ -211,7 +212,11 @@ position it came from in the `pretty-tables-pos' property."
                (display-images-p))
           (push (pretty-tables--image-string display image-width pos) parts))
          ((stringp display)
-          (push (propertize (copy-sequence display) 'pretty-tables-pos pos)
+          ;; A newline would end the drawn row's screen line inside a
+          ;; cell.  latex-to-svg shows the spaces around display math
+          ;; as one.
+          (push (propertize (subst-char-in-string ?\n ?\s display)
+                            'pretty-tables-pos pos)
                 parts))
          ((and (eq (car-safe display) 'space)
                (natnump (plist-get (cdr display) :width)))

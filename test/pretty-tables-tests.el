@@ -319,6 +319,15 @@ End.
       (should (equal (pretty-tables-tests--rows)
                      '("| aaaa     | xxxxxxxxxx\u200b |\n| bbbb     |            |\n| cccc     |            |"))))))
 
+(ert-deftest pretty-tables-test-visible-string-newline ()
+  "A newline in a `display' string is read as a space."
+  (with-temp-buffer
+    (insert "a b")
+    (let ((ov (make-overlay 2 3)))
+      (overlay-put ov 'display "\n"))
+    (should (equal (substring-no-properties (pretty-tables--visible-string 1 4))
+                   "a b"))))
+
 (ert-deftest pretty-tables-test-visible-string-adaptor-invisible ()
   "The adaptor's `:invisible' function decides what takes no room."
   (with-temp-buffer
