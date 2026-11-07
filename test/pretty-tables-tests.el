@@ -445,6 +445,10 @@ There `font-lock-fontified' is nil, and `font-lock-flush' does nothing."
                   (pretty-tables-row-lines t t) (pretty-tables-row-lines "t" nil)
                   (pretty-tables-borders ascii t) (pretty-tables-borders lines t)
                   (pretty-tables-borders nil nil)
+                  (pretty-tables-separator-spacing 0 t)
+                  (pretty-tables-separator-spacing 0.25 t)
+                  (pretty-tables-separator-spacing -1 nil)
+                  (pretty-tables-separator-spacing "1" nil)
                   (pretty-tables-reveal always t) (pretty-tables-reveal writable t)
                   (pretty-tables-reveal nil t) (pretty-tables-reveal yes nil)))
     (should (eq (and (safe-local-variable-p (nth 0 case) (nth 1 case)) t)
@@ -809,6 +813,36 @@ The row before it is underlined in its last screen line; with
                     (1- (overlay-start (nth 2 ovs)))))
         (should-not (pretty-tables-tests--underlined-p
                      (overlay-get (nth 0 ovs) 'pretty-tables-string)))))))
+
+(defun pretty-tables-tests--spacing ()
+  "Return the `line-spacing' of each spacing overlay, by position."
+  (mapcar (lambda (ov) (cons (overlay-start ov) (overlay-get ov 'line-spacing)))
+          (seq-filter (lambda (ov) (overlay-get ov 'pretty-tables-spacing))
+                      (overlays-in (point-min) (point-max)))))
+
+(ert-deftest pretty-tables-test-separator-spacing ()
+  "With `lines', the newline of an underlined row gets a `line-spacing'.
+It is `(t . RATIO)' with RATIO the option, on the newline after the
+row; it is not added with `ascii' or with 0, and drawing the table
+again replaces it."
+  (let ((pretty-tables-borders 'lines))
+    (pretty-tables-tests--with-buffer
+        "Title\n\n| a | b |\n|---|---|\n| r0 | x |\n"
+      (let ((newline (overlay-end (car (pretty-tables-tests--overlays)))))
+        (should (eql (char-after newline) ?\n))
+        (should (equal (pretty-tables-tests--spacing)
+                       (list (cons newline '(t . 0.25)))))
+        (setq-local pretty-tables-separator-spacing 0.5)
+        (jit-lock-fontify-now)
+        (should (equal (pretty-tables-tests--spacing)
+                       (list (cons newline '(t . 0.5)))))
+        (setq-local pretty-tables-separator-spacing 0)
+        (jit-lock-fontify-now)
+        (should-not (pretty-tables-tests--spacing))
+        (kill-local-variable 'pretty-tables-separator-spacing)
+        (setq-local pretty-tables-borders 'ascii)
+        (jit-lock-fontify-now)
+        (should-not (pretty-tables-tests--spacing))))))
 
 (defun pretty-tables-tests--displays (string)
   "Return the `display' and `face' of each character of STRING."

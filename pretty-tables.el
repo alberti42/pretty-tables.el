@@ -112,6 +112,16 @@ delimiter row does not show the alignment of its columns."
                  (const :tag "Continuous lines" lines))
   :safe (lambda (value) (memq value '(ascii lines))))
 
+(defcustom pretty-tables-separator-spacing 0.25
+  "Space between a row and the line of the separator row under it.
+In units of the height of a line of text.  Used when
+`pretty-tables-borders' is `lines', below a row that is underlined in
+place of the separator row after it: the space is the `line-spacing'
+of the newline that ends the row, so the line stays against the row
+below and the vertical lines cross the space."
+  :type 'number
+  :safe (lambda (value) (and (numberp value) (>= value 0))))
+
 (defcustom pretty-tables-reveal 'writable
   "When the row point is on is shown as its raw text.
 `always' means in every buffer, `writable' in a buffer that is not
@@ -495,10 +505,30 @@ the cells are those of `pretty-tables--border'."
 ;;; Drawing a table
 
 (defun pretty-tables--delete-overlays (beg end)
-  "Delete the row overlays that overlap BEG to END."
+  "Delete the row overlays that overlap BEG to END.
+The overlays of `pretty-tables--add-spacing' go too."
   (dolist (ov (overlays-in beg end))
-    (when (overlay-get ov 'pretty-tables)
+    (when (or (overlay-get ov 'pretty-tables)
+              (overlay-get ov 'pretty-tables-spacing))
       (delete-overlay ov))))
+
+(defun pretty-tables--add-spacing (pos)
+  "Put `pretty-tables-separator-spacing' below the line ending at POS.
+POS is the position of the newline that ends the line.  An overlay on
+the newline gets a `line-spacing' of `(t . RATIO)', RATIO times the
+height of the newline's face, so the space follows
+`text-scale-adjust'.  Emacs puts the space below the line and counts
+it in the line's height: the backgrounds of the line's glyphs, and so
+the vertical lines, fill it, and an underline at the descent line is
+drawn below it.  Nothing is added when the option is 0 or there is no
+newline at POS."
+  (when (and (> pretty-tables-separator-spacing 0)
+             (eql (char-after pos) ?\n))
+    (let ((ov (make-overlay pos (1+ pos) nil t nil)))
+      (overlay-put ov 'pretty-tables-spacing t)
+      (overlay-put ov 'evaporate t)
+      (overlay-put ov 'line-spacing
+                   (cons t pretty-tables-separator-spacing)))))
 
 (defun pretty-tables--row-face (stripe)
   "Return the face of a data row: the stripe face if STRIPE is non-nil.
@@ -594,7 +624,8 @@ starting at REVEALED is left as raw text.
 When `pretty-tables-borders' is `lines', a separator row that follows
 a row other than a separator is hidden with its newline, so it takes
 no screen line, and the row before it is underlined in its place; see
-`pretty-tables--underline-last-line'."
+`pretty-tables--underline-last-line'.  The line ending that row gets
+the space of `pretty-tables--add-spacing'."
   ;; The old overlays go first: the cells are read with
   ;; `get-char-property', which would return their `display' of "".
   (pretty-tables--delete-overlays (plist-get table :beg) (plist-get table :end))
@@ -665,7 +696,8 @@ no screen line, and the row before it is underlined in its place; see
                                   end)
                                 nil t nil)))
          (when underline
-           (pretty-tables--underline-last-line string))
+           (pretty-tables--underline-last-line string)
+           (pretty-tables--add-spacing end))
          (pcase kind
            ('data
             (setq index (1+ index))
@@ -785,7 +817,8 @@ runs there."
     pretty-tables-min-column-width
     pretty-tables-stripe-rows
     pretty-tables-row-lines
-    pretty-tables-borders)
+    pretty-tables-borders
+    pretty-tables-separator-spacing)
   "Variables the drawing of a table depends on.
 Setting one draws the tables again; see
 `pretty-tables--option-changed'.")

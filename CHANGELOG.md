@@ -21,7 +21,10 @@ to `X.Y.Z`.
   1 pixel wide and spans the whole height of each screen line.  A
   separator row that follows a row other than a separator takes no
   screen line: it is hidden, and the row before it is underlined on the
-  bottom pixel row of its last screen line.  On a text terminal
+  bottom pixel row of its last screen line.  The option
+  `pretty-tables-separator-spacing` (default 0.25) puts space between
+  that row and the line, in units of the height of a line of text.  On
+  a text terminal
   the lines are box-drawing characters.
 
 ### Changed
