@@ -443,6 +443,8 @@ There `font-lock-fontified' is nil, and `font-lock-flush' does nothing."
                   (pretty-tables-min-column-width -1 nil)
                   (pretty-tables-stripe-rows nil t) (pretty-tables-stripe-rows 1 nil)
                   (pretty-tables-row-lines t t) (pretty-tables-row-lines "t" nil)
+                  (pretty-tables-borders ascii t) (pretty-tables-borders lines t)
+                  (pretty-tables-borders nil nil)
                   (pretty-tables-reveal always t) (pretty-tables-reveal writable t)
                   (pretty-tables-reveal nil t) (pretty-tables-reveal yes nil)))
     (should (eq (and (safe-local-variable-p (nth 0 case) (nth 1 case)) t)
@@ -756,6 +758,105 @@ face takes its place."
                             (memq 'pretty-tables-row-line
                                   (pretty-tables-tests--faces row)))
                           (pretty-tables-tests--row-strings)))))
+
+(ert-deftest pretty-tables-test-borders-lines-terminal ()
+  "On a text terminal, `lines' draws box-drawing characters.
+The adaptor's separator is not called.  A separator at the top of the
+table is drawn as a row."
+  (let ((pretty-tables-borders 'lines))
+    (pretty-tables-tests--with-buffer
+        "Title\n\n|---|---|\n| a | b |\n| r0 | x |\n"
+      (should (equal (pretty-tables-tests--rows)
+                     '("├────┼───┤" "│ a  │ b │" "│ r0 │ x │")))
+      (should (memq 'pretty-tables-border
+                    (pretty-tables-tests--faces
+                     (car (pretty-tables-tests--row-strings))))))))
+
+(defun pretty-tables-tests--underlined-p (string)
+  "Return non-nil when STRING has a face that underlines at the descent line."
+  (seq-some (lambda (face)
+              (and (consp face)
+                   (plist-get (plist-get face :underline) :position)))
+            (pretty-tables-tests--faces string)))
+
+(ert-deftest pretty-tables-test-borders-lines-hide-separator ()
+  "With `lines', a separator after a row is hidden with its newline.
+The row before it is underlined in its last screen line; with
+`ascii', nothing is hidden or underlined."
+  (let ((pretty-tables-borders 'lines))
+    (pretty-tables-tests--with-buffer
+        "Title\n\n| a<br>b | c |\n|---|---|\n| r0 | x |\n"
+      (let* ((ovs (pretty-tables-tests--overlays))
+             (sep (nth 1 ovs))
+             (header (overlay-get (nth 0 ovs) 'pretty-tables-string))
+             (newline (string-search "\n" header)))
+        (should (equal (overlay-get sep 'display) ""))
+        (should (equal (overlay-get sep 'before-string) ""))
+        (should (eq (overlay-end sep) (overlay-start (nth 2 ovs))))
+        (should-not (pretty-tables-tests--underlined-p
+                     (substring header 0 newline)))
+        (should (pretty-tables-tests--underlined-p
+                 (substring header (1+ newline))))
+        (should-not (pretty-tables-tests--underlined-p
+                     (overlay-get (nth 2 ovs) 'pretty-tables-string))))
+      (setq-local pretty-tables-borders 'ascii)
+      (jit-lock-fontify-now)
+      (let ((ovs (pretty-tables-tests--overlays)))
+        (should (equal (substring-no-properties
+                        (overlay-get (nth 1 ovs) 'pretty-tables-string))
+                       "|----|---|"))
+        (should (eq (overlay-end (nth 1 ovs))
+                    (1- (overlay-start (nth 2 ovs)))))
+        (should-not (pretty-tables-tests--underlined-p
+                     (overlay-get (nth 0 ovs) 'pretty-tables-string)))))))
+
+(defun pretty-tables-tests--displays (string)
+  "Return the `display' and `face' of each character of STRING."
+  (mapcar (lambda (i)
+            (list (get-text-property i 'display string)
+                  (get-text-property i 'face string)))
+          (number-sequence 0 (1- (length string)))))
+
+(ert-deftest pretty-tables-test-borders-lines-graphic ()
+  "On a graphical display, `lines' draws 1-pixel lines.
+Each vertical line is one column with a 1-pixel stretch in reverse
+video: in the middle between two columns, on the outer side at the
+left and right edges.  A separator row at the top of the table is a stretch per column with a
+underline at the descent line, and the other stretches of its vertical lines have
+one too."
+  (let ((pretty-tables-borders 'lines)
+        (pretty-tables-stripe-rows nil))
+    (cl-letf (((symbol-function 'display-graphic-p) #'always))
+      (pretty-tables-tests--with-buffer
+          "Title\n\n|---|---|\n| a | b |\n| r0 | x |\n"
+        (let* ((rows (pretty-tables-tests--row-strings))
+               (line '((space :width (1))
+                       (:inherit pretty-tables-border :inverse-video t)))
+               (displays
+                (lambda (face)
+                  (let ((edge (list '(space :width (- width (1))) face))
+                        (half (list '(space :width (0.5 . width)) face))
+                        (rest (list '(space :width (- (0.5 . width) (0.5)))
+                                    face)))
+                    (list (list line edge) (list half line rest)
+                          (list edge line)))))
+               (data (funcall displays nil))
+               (rule (funcall displays
+                              '(:inherit pretty-tables-border :underline (:position t))))
+               (data-row (pretty-tables-tests--displays (nth 2 rows))))
+          (should (equal (substring-no-properties (nth 2 rows))
+                         "   r0     x   "))
+          (should (equal (seq-take data-row 2) (nth 0 data)))
+          (should (equal (seq-subseq data-row 6 9) (nth 1 data)))
+          (should (equal (last data-row 2) (nth 2 data)))
+          (should (equal (pretty-tables-tests--displays (nth 0 rows))
+                         (append (nth 0 rule)
+                                 (list (list '(space :width (4 . width))
+                                             (cadr (car (nth 1 rule)))))
+                                 (nth 1 rule)
+                                 (list (list '(space :width (3 . width))
+                                             (cadr (car (nth 1 rule)))))
+                                 (nth 2 rule)))))))))
 
 (ert-deftest pretty-tables-test-stripe-under-cell-faces ()
   "The row face comes after the faces of the cell text."

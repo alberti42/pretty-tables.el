@@ -12,6 +12,18 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- The option `pretty-tables-borders`: `ascii` (the default) draws the
+  lines between the cells with `|`, `-` and `+`; `lines` draws lines
+  that join from one screen line to the next, in the face
+  `pretty-tables-border`.  On a graphical display a vertical line is
+  1 pixel wide and spans the whole height of each screen line.  A
+  separator row that follows a row other than a separator takes no
+  screen line: it is hidden, and the row before it is underlined on the
+  bottom pixel row of its last screen line.  On a text terminal
+  the lines are box-drawing characters.
+
 ### Changed
 
 - `pretty-tables-for-markdown-mode` is marked as a command of

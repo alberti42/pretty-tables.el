@@ -43,7 +43,9 @@
 ;; are drawn with alternating backgrounds (`pretty-tables-stripe-rows'),
 ;; and a line can be drawn under each data row
 ;; (`pretty-tables-row-lines').  The text of header rows is drawn with
-;; the face `pretty-tables-header', bold by default.
+;; the face `pretty-tables-header', bold by default.  The lines between
+;; the cells are `|' and `-' characters, or, with `pretty-tables-borders'
+;; set to `lines', lines that join from one screen line to the next.
 ;;
 ;; The row point is on is shown as its raw text, so it can be edited and
 ;; its links followed.  In a read-only buffer it stays drawn, except
@@ -91,6 +93,25 @@ so it takes no screen line of its own."
   :type 'boolean
   :safe #'booleanp)
 
+(defcustom pretty-tables-borders 'ascii
+  "How the lines between the cells of a drawn table are drawn.
+`ascii' means with the characters `|', `-' and `+', or those of the
+adaptor's separator row.  `lines' means with lines that join from one
+screen line to the next, in the face `pretty-tables-border'.  On a
+graphical display a vertical line is 1 pixel wide and spans the whole
+height of each screen line.  A separator row that follows a row other
+than a separator takes no screen line: it is hidden, and the row
+before it is underlined on the bottom pixel row of its last screen
+line, against the row below.  Another separator row is a horizontal
+line on the bottom pixel row of its own screen line.  With
+`display-line-numbers', the number of a hidden separator row is not
+shown.  On a text terminal the lines are the box-drawing
+characters `│', `─', `├', `┼' and `┤'.  With `lines', a Markdown
+delimiter row does not show the alignment of its columns."
+  :type '(choice (const :tag "ASCII characters" ascii)
+                 (const :tag "Continuous lines" lines))
+  :safe (lambda (value) (memq value '(ascii lines))))
+
 (defcustom pretty-tables-reveal 'writable
   "When the row point is on is shown as its raw text.
 `always' means in every buffer, `writable' in a buffer that is not
@@ -126,6 +147,12 @@ this face itself takes the place of the one of `lazy-highlight'.  See
     (t :underline t))
   "Face added to the last screen line of each data row but the last.
 See `pretty-tables-row-lines'.")
+
+(defface pretty-tables-border
+  '((t :inherit shadow))
+  "Face of the lines between the cells of a drawn table.
+Its foreground is the colour of the lines.  Used when
+`pretty-tables-borders' is `lines'.")
 
 (defface pretty-tables-header
   '((t :inherit bold))
@@ -372,10 +399,77 @@ Lines are substrings of PARAGRAPH, so they keep its text properties."
                  (_ 0))))
     (concat (make-string left ?\s) text (make-string (- gap left) ?\s))))
 
+(defun pretty-tables--border (edge &optional rule)
+  "Return the string drawing a vertical line of a table.
+EDGE is `left' for the line at the left of the first column, `right'
+for the one at the right of the last column, and nil for a line
+between two columns.  RULE non-nil means the line crosses a separator
+row.  The string is one column wide.
+
+With `pretty-tables-borders' `ascii' it is `|'.  With `lines', on a
+graphical display, it holds a 1-pixel stretch drawn in the foreground
+of `pretty-tables-border', and stretches for the rest of the column.
+Between two columns the line is in the middle of the column; at the
+left and right edges it is on the outer side, so the background of a
+row ends at the line.  The `width' unit is the width of the face's
+font, so the column follows `text-scale-adjust'.  A glyph's
+background fills the height of its screen line, so the 1-pixel
+stretch draws a line that joins the one of the screen line below.
+With RULE the other stretches have an underline at the descent line,
+which is the bottom pixel row of the screen line: the horizontal line
+of the separator row.  On a text terminal the string is `│', or
+with RULE `├', `┼' or `┤'."
+  (cond
+   ((not (eq pretty-tables-borders 'lines)) "|")
+   ((display-graphic-p)
+    (let ((line (propertize " " 'display '(space :width (1))
+                            'face (list :inherit 'pretty-tables-border
+                                        :inverse-video t)))
+          (face (if rule (list :inherit 'pretty-tables-border
+                               :underline '(:position t)))))
+      (pcase edge
+        ('left (concat line (propertize " " 'display '(space :width (- width (1)))
+                                        'face face)))
+        ('right (concat (propertize " " 'display '(space :width (- width (1)))
+                                    'face face)
+                        line))
+        (_ (concat (propertize " " 'display '(space :width (0.5 . width))
+                               'face face)
+                   line
+                   ;; A stretch's width is truncated to whole pixels:
+                   ;; with the half pixel taken off, the three add up to
+                   ;; one column whether the font width is odd or even.
+                   (propertize " " 'display '(space :width (- (0.5 . width) (0.5)))
+                               'face face))))))
+   (t (propertize (cond ((not rule) "│")
+                        ((eq edge 'left) "├")
+                        ((eq edge 'right) "┤")
+                        (t "┼"))
+                  'face 'pretty-tables-border))))
+
+(defun pretty-tables--draw-rule (widths)
+  "Return the string drawing a separator row of the column WIDTHS.
+It is a horizontal line across the row, crossed by the vertical lines
+of `pretty-tables--border'.  Used when `pretty-tables-borders' is
+`lines', in place of the adaptor's `:separator'."
+  (let ((graphic (display-graphic-p)))
+    (concat (pretty-tables--border 'left t)
+            (mapconcat
+             (lambda (w)
+               (if graphic
+                   (propertize " " 'display `(space :width (,(+ 2 w) . width))
+                               'face (list :inherit 'pretty-tables-border
+                                           :underline '(:position t)))
+                 (propertize (make-string (+ 2 w) ?─)
+                             'face 'pretty-tables-border)))
+             widths (pretty-tables--border nil t))
+            (pretty-tables--border 'right t))))
+
 (defun pretty-tables--draw-row (cells widths alignments)
   "Return the string drawing a row whose cells are CELLS.
 CELLS is a list of cells, each a list of paragraphs.  WIDTHS and
-ALIGNMENTS give each column's width and alignment."
+ALIGNMENTS give each column's width and alignment.  The lines between
+the cells are those of `pretty-tables--border'."
   (let* ((wrapped (seq-map-indexed
                    (lambda (width i)
                      (mapcan (lambda (p) (pretty-tables--wrap p width))
@@ -384,15 +478,17 @@ ALIGNMENTS give each column's width and alignment."
          (height (apply #'max 1 (mapcar #'length wrapped)))
          lines)
     (dotimes (k height)
-      (push (concat "|"
+      (push (concat (pretty-tables--border 'left)
                     (mapconcat
                      (lambda (i)
                        (concat " "
                                (pretty-tables--pad
                                 (or (nth k (nth i wrapped)) "")
                                 (nth i widths) (nth i alignments))
-                               " |"))
-                     (number-sequence 0 (1- (length widths)))))
+                               " "))
+                     (number-sequence 0 (1- (length widths)))
+                     (pretty-tables--border nil))
+                    (pretty-tables--border 'right))
             lines))
     (mapconcat #'identity (nreverse lines) "\n")))
 
@@ -448,6 +544,23 @@ background, see `pretty-tables--row-face'.  It is added with
     (add-face-text-property (match-beginning 0) (length string)
                             'pretty-tables-row-line t string)))
 
+(defun pretty-tables--underline-last-line (string)
+  "Draw a horizontal line under the last screen line of STRING, a row.
+The line is an underline at the descent line, on the bottom pixel row
+of the screen line, in the foreground of `pretty-tables-border'.  It
+is added before the faces of the cell text, so it is drawn under a
+link too.  It takes the place of a separator row that
+`pretty-tables--render-table' hides when `pretty-tables-borders' is
+`lines'."
+  (let ((colour (face-foreground 'pretty-tables-border nil t)))
+    ;; The last screen line of the row: `.' does not match a newline.
+    (string-match ".*\\'" string)
+    (add-face-text-property (match-beginning 0) (length string)
+                            (list :underline (if colour
+                                                 (list :color colour :position t)
+                                               '(:position t)))
+                            nil string)))
+
 (defun pretty-tables--prefix (pos)
   "Return the prefix of the screen lines of a row drawn from POS.
 It is the `line-prefix' of the line POS is on, followed by the text
@@ -477,7 +590,11 @@ an image in a cell is one (see `pretty-tables--image-string')."
 (defun pretty-tables--render-table (table revealed)
   "Cover each row of TABLE with an overlay that draws it aligned.
 TABLE is a table as `pretty-tables-enable' describes it.  The row
-starting at REVEALED is left as raw text."
+starting at REVEALED is left as raw text.
+When `pretty-tables-borders' is `lines', a separator row that follows
+a row other than a separator is hidden with its newline, so it takes
+no screen line, and the row before it is underlined in its place; see
+`pretty-tables--underline-last-line'."
   ;; The old overlays go first: the cells are read with
   ;; `get-char-property', which would return their `display' of "".
   (pretty-tables--delete-overlays (plist-get table :beg) (plist-get table :end))
@@ -516,10 +633,18 @@ starting at REVEALED is left as raw text."
                            rows))
          (separator (plist-get pretty-tables--adaptor :separator))
          (table-face (plist-get pretty-tables--adaptor :face))
+         (kinds (mapcar (lambda (row) (plist-get row :kind)) rows))
+         (hidden (seq-mapn (lambda (previous kind)
+                             (and (eq pretty-tables-borders 'lines)
+                                  (eq kind 'separator)
+                                  previous
+                                  (not (eq previous 'separator))))
+                           (cons nil kinds) kinds))
          (index -1))
     (seq-mapn
-     (lambda (row cells)
+     (lambda (row cells hide underline)
        (let* ((beg (plist-get row :beg))
+              (end (plist-get row :end))
               (kind (plist-get row :kind))
               (string (progn
                         (when (eq kind 'header)
@@ -527,10 +652,20 @@ starting at REVEALED is left as raw text."
                             (add-face-text-property
                              0 (length paragraph) 'pretty-tables-header t
                              paragraph)))
-                        (if (eq kind 'separator)
-                            (funcall separator widths alignments)
-                          (pretty-tables--draw-row cells widths alignments))))
-              (ov (make-overlay beg (plist-get row :end) nil t nil)))
+                        (cond
+                         (hide "")
+                         ((not (eq kind 'separator))
+                          (pretty-tables--draw-row cells widths alignments))
+                         ((eq pretty-tables-borders 'lines)
+                          (pretty-tables--draw-rule widths))
+                         (t (funcall separator widths alignments)))))
+              (ov (make-overlay beg
+                                (if (and hide (eql (char-after end) ?\n))
+                                    (1+ end)
+                                  end)
+                                nil t nil)))
+         (when underline
+           (pretty-tables--underline-last-line string))
          (pcase kind
            ('data
             (setq index (1+ index))
@@ -539,25 +674,26 @@ starting at REVEALED is left as raw text."
             (pretty-tables--add-line-face string 'pretty-tables-header-row)))
          (when table-face
            (add-face-text-property 0 (length string) table-face t string))
-         (let ((prefix (funcall (or (plist-get pretty-tables--adaptor :prefix)
-                                    #'pretty-tables--prefix)
-                                beg)))
-           (add-text-properties 0 (length string)
-                                (list 'keymap pretty-tables-row-map
-                                      'pointer 'arrow
-                                      'line-prefix prefix
-                                      'wrap-prefix prefix)
-                                string)
-           ;; Point at the start of a drawn row shows the cursor at the
-           ;; start of the string, not after it.
-           (put-text-property 0 1 'cursor t string))
+         (unless hide
+           (let ((prefix (funcall (or (plist-get pretty-tables--adaptor :prefix)
+                                      #'pretty-tables--prefix)
+                                  beg)))
+             (add-text-properties 0 (length string)
+                                  (list 'keymap pretty-tables-row-map
+                                        'pointer 'arrow
+                                        'line-prefix prefix
+                                        'wrap-prefix prefix)
+                                  string)
+             ;; Point at the start of a drawn row shows the cursor at the
+             ;; start of the string, not after it.
+             (put-text-property 0 1 'cursor t string)))
          (overlay-put ov 'pretty-tables t)
          (overlay-put ov 'pretty-tables-string string)
          (overlay-put ov 'evaporate t)
          (if (eql beg revealed)
              (setq pretty-tables--revealed ov)
            (pretty-tables--show-drawn ov t))))
-     rows data)))
+     rows data hidden (append (cdr hidden) (list nil)))))
 
 (defun pretty-tables--fontify (beg end)
   "Draw every table that overlaps BEG to END.
@@ -648,7 +784,8 @@ runs there."
     pretty-tables-width
     pretty-tables-min-column-width
     pretty-tables-stripe-rows
-    pretty-tables-row-lines)
+    pretty-tables-row-lines
+    pretty-tables-borders)
   "Variables the drawing of a table depends on.
 Setting one draws the tables again; see
 `pretty-tables--option-changed'.")
@@ -692,7 +829,8 @@ An adaptor calls this from its minor mode.  ADAPTOR is a plist:
               Required.
 `:separator'  A function called with the column WIDTHS and
               ALIGNMENTS that returns a new string drawing a
-              separator row.  Required.
+              separator row.  Not called when `pretty-tables-borders'
+              is `lines'.  Required.
 `:line-break' A regexp, matched ignoring case, that splits a cell
               into lines, or nil.
 `:face'       A face appended to every drawn row, after the cell's
