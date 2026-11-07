@@ -12,6 +12,14 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Changed
+
+- `pretty-tables-for-markdown-mode` is marked as a command of
+  `markdown-ts-mode`, and `pretty-tables-for-org-mode` as a command of
+  `org-mode`.  With `read-extended-command-predicate` set to
+  `command-completion-default-include-p`, `M-x` offers each only in
+  buffers whose major mode is that mode or derived from it.
+
 ## [0.5.0] - 2026-10-10
 
 ### Added

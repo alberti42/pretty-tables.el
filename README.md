@@ -120,7 +120,7 @@ With straight.el, from a local clone, one recipe per package, `pretty-tables` fi
 
 ## Usage
 
-`M-x pretty-tables-for-markdown-mode` or `M-x pretty-tables-for-org-mode` turns the mode on in the current buffer; the hooks above turn it on in every `markdown-ts-mode` or `org-mode` buffer.
+`M-x pretty-tables-for-markdown-mode` or `M-x pretty-tables-for-org-mode` turns the mode on in the current buffer. Each is marked as a command of `markdown-ts-mode` or `org-mode`, so with `read-extended-command-predicate` set to `command-completion-default-include-p`, `M-x` offers it only in buffers of that mode or a mode derived from it. The hooks above turn it on in every `markdown-ts-mode` or `org-mode` buffer.
 
 - The row point is on is shown as its raw text, so it can be edited and its links followed. In a read-only buffer it stays drawn, except during an Isearch; `pretty-tables-reveal` changes that.
 - After a scroll command, a row point moved onto stays drawn until the next command. A scroll command is one with a non-nil `scroll-command` property: `mwheel-scroll`, `pixel-scroll-precision`, `scroll-up-command`, `scroll-down-command` and the other scroll commands of Emacs.

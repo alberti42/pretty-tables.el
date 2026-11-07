@@ -216,6 +216,7 @@ command moved point onto it.
 Table cells are parsed as inline Markdown, so their links, emphasis and
 code are fontified."
   :lighter nil
+  :interactive (markdown-ts-mode)
   (cond
    (pretty-tables-for-markdown-mode
     (pretty-tables-for-markdown--parse-cells t)

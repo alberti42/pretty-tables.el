@@ -325,6 +325,7 @@ The buffer text is not changed.  The row point is on is shown as its
 raw text when `pretty-tables-reveal' says so, except after a scroll
 command moved point onto it."
   :lighter nil
+  :interactive (org-mode)
   (if pretty-tables-for-org-mode
       (progn
         (add-hook 'jit-lock-after-change-extend-region-functions
