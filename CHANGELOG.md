@@ -12,30 +12,7 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
-### Added
-
-- The option `pretty-tables-borders`: `ascii` (the default) draws the
-  lines between the cells with `|`, `-` and `+`; `lines` draws lines
-  that join from one screen line to the next, in the face
-  `pretty-tables-border`.  On a graphical display a vertical line is
-  1 pixel wide and spans the whole height of each screen line.  A
-  separator row that follows a row other than a separator takes no
-  screen line: it is hidden, and the row before it is underlined on the
-  bottom pixel row of its last screen line.  The option
-  `pretty-tables-separator-spacing` (default 0.25) puts space between
-  that row and the line, in units of the height of a line of text.  On
-  a text terminal
-  the lines are box-drawing characters.
-
-### Changed
-
-- `pretty-tables-for-markdown-mode` is marked as a command of
-  `markdown-ts-mode`, and `pretty-tables-for-org-mode` as a command of
-  `org-mode`.  With `read-extended-command-predicate` set to
-  `command-completion-default-include-p`, `M-x` offers each only in
-  buffers whose major mode is that mode or derived from it.
-
-## [0.5.0] - 2026-10-10
+## [0.5.0] - 2026-11-07
 
 ### Added
 
@@ -57,9 +34,23 @@ to `X.Y.Z`.
   fewest columns that hold its `:width` times its `:scale`, and its column
   is not narrowed below them.
 - The options `pretty-tables-width`, `pretty-tables-min-column-width`,
-  `pretty-tables-stripe-rows`, `pretty-tables-row-lines` and
-  `pretty-tables-reveal` are safe as file-local and directory-local
-  variables when their value has the option's type.
+  `pretty-tables-stripe-rows`, `pretty-tables-row-lines`,
+  `pretty-tables-reveal`, `pretty-tables-borders` and
+  `pretty-tables-separator-spacing` are safe as file-local and
+  directory-local variables when their value has the option's type.
+- The option `pretty-tables-borders`: `ascii` (the default) draws the
+  lines between the cells with `|`, `-` and `+`; `lines` draws lines
+  that join from one screen line to the next, in the face
+  `pretty-tables-border`.  On a graphical display a vertical line is
+  1 pixel wide and spans the whole height of each screen line.  A
+  separator row that follows a row other than a separator takes no
+  screen line: it is hidden, and the row before it is underlined on the
+  bottom pixel row of its last screen line.  On a text terminal the
+  lines are box-drawing characters.
+- The option `pretty-tables-separator-spacing` (default 0.25): with
+  `pretty-tables-borders` set to `lines`, the space between a row and
+  the line under it that replaces a separator row, in units of the
+  height of a line of text.
 
 ### Changed
 
@@ -67,6 +58,11 @@ to `X.Y.Z`.
   `""` hides the row's text; the drawn row was the overlay's `display`.
   Emacs ignores the `display` properties inside a string that is itself a
   `display`, so an image in a cell showed as the text under it.
+- `pretty-tables-for-markdown-mode` is marked as a command of
+  `markdown-ts-mode`, and `pretty-tables-for-org-mode` as a command of
+  `org-mode`.  With `read-extended-command-predicate` set to
+  `command-completion-default-include-p`, `M-x` offers each only in
+  buffers whose major mode is that mode or derived from it.
 
 ### Fixed
 
