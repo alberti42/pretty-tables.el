@@ -77,8 +77,16 @@ jobs:
           git clone https://github.com/riscy/melpazoid.git ~/melpazoid
           pip install ~/melpazoid
 
+      # melpazoid fetches from the GitHub API without a token, and on
+      # 2026-11-08 GitHub timed out such requests ("Increase in timeouts
+      # for some unauthenticated users").  Python imports
+      # .github/scripts/sitecustomize.py when it starts, from PYTHONPATH,
+      # and that module sends GITHUB_TOKEN with the requests to
+      # api.github.com, in `make' and in melpazoid-with-core.py alike.
       - name: Run melpazoid
         env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PYTHONPATH: ${{ github.workspace }}/.github/scripts
           LOCAL_REPO: ${{ github.workspace }}
           # The recipe MELPA would build from, so that what is checked here
           # is what MELPA would ship.
