@@ -63,6 +63,10 @@
 ;; Defines the `hl-line' face, whose background `pretty-tables-row' takes.
 (require 'hl-line)
 
+;; Defined in an Emacs built with image support; called only after
+;; `display-images-p' returned non-nil.
+(declare-function image-size "image.c" (spec &optional pixels frame))
+
 (defgroup pretty-tables nil
   "Aligned, wrapped display of tables."
   :group 'text
