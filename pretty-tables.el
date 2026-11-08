@@ -122,6 +122,17 @@ below and the vertical lines cross the space."
   :type 'number
   :safe (lambda (value) (and (numberp value) (>= value 0))))
 
+(defcustom pretty-tables-image-spacing 0.25
+  "Space above and below an image in a cell of a drawn table.
+In units of the height of a line of text, split evenly above and
+below the image.  The space is a vertical `:margin' of the copy of
+the image that draws it, so the image does not touch the rows above
+and below it, and its `:ascent' is changed so that it stays on the
+same baseline.  An image that already has a `:margin' is left as it
+is."
+  :type 'number
+  :safe (lambda (value) (and (numberp value) (>= value 0))))
+
 (defcustom pretty-tables-reveal 'writable
   "When the row point is on is shown as its raw text.
 `always' means in every buffer, `writable' in a buffer that is not
@@ -198,15 +209,56 @@ function again.")
 
 ;;; Reading the buffer
 
+(defun pretty-tables--image-ascent (image height)
+  "Return the ascent in pixels of IMAGE, HEIGHT pixels tall, with no margin.
+It is computed as `image_ascent' in Emacs's image.c computes it: from
+the `:ascent' of IMAGE, a percentage, `center', or none, which stands
+for 50.  `center' uses the ascent and descent of the font of the
+`default' face."
+  (let ((ascent (or (image-property image :ascent) 50)))
+    (if (eq ascent 'center)
+        (let ((font (font-info (face-font 'default))))
+          (if font
+              (floor (+ height (aref font 8) (- (aref font 9)) 1) 2)
+            (floor height 2)))
+      (truncate (* height (/ ascent 100.0))))))
+
+(defun pretty-tables--image-with-margin (image)
+  "Return a copy of IMAGE with the vertical margin of the option.
+The margin is M = `pretty-tables-image-spacing' times the height of a
+line of text, halved and rounded, above and below the image.  Emacs
+computes the ascent of an image with a margin from the image's height
+plus one margin, while the image takes its height plus two, so the
+copy's `:ascent' is the percentage that puts the image where it was
+without a margin: the image's own ascent plus M, out of its height
+plus M.  The percentage is rounded up, because Emacs truncates the
+ascent it computes from it.  IMAGE itself is returned when the option
+is 0 or IMAGE has a `:margin'."
+  (let ((margin (round (* pretty-tables-image-spacing (default-line-height))
+                       2)))
+    (if (or (<= margin 0) (image-property image :margin))
+        image
+      (let* ((height (cdr (image-size image t)))
+             (ascent (+ (pretty-tables--image-ascent image height) margin))
+             (spec (copy-sequence (cdr image))))
+        (setq spec (plist-put spec :margin (cons 0 margin)))
+        (setq spec (plist-put spec :ascent
+                              (min 100 (max 0 (ceiling (* 100 ascent)
+                                                       (+ height margin))))))
+        (cons 'image spec)))))
+
 (defun pretty-tables--image-string (image width pos)
   "Return the string that shows IMAGE, WIDTH pixels wide, in a cell.
 The string takes N columns, the fewest that hold WIDTH pixels.  Its
 first character shows IMAGE; the others, N - 1 characters and a
 zero-width space, show the space from the image to N columns, which
-the display engine computes from IMAGE itself.  Every character has
-POS in `pretty-tables-pos' and (N) in `pretty-tables-image';
-`pretty-tables--break-word' does not split the string."
-  (let* ((font (default-font-width))
+the display engine computes from IMAGE itself.  The image shown is
+the copy of `pretty-tables--image-with-margin', which the space
+after it names too.  Every character has POS in `pretty-tables-pos'
+and (N) in `pretty-tables-image'; `pretty-tables--break-word' does
+not split the string."
+  (let* ((image (pretty-tables--image-with-margin image))
+         (font (default-font-width))
          (n (max 1 (ceiling width font)))
          (string (concat (make-string n ?x) "\u200b")))
     (put-text-property 0 1 'display image string)
@@ -818,7 +870,8 @@ runs there."
     pretty-tables-stripe-rows
     pretty-tables-row-lines
     pretty-tables-borders
-    pretty-tables-separator-spacing)
+    pretty-tables-separator-spacing
+    pretty-tables-image-spacing)
   "Variables the drawing of a table depends on.
 Setting one draws the tables again; see
 `pretty-tables--option-changed'.")

@@ -243,11 +243,56 @@ End.
 Batch mode cannot show it, so it is never loaded.")
 
 (defmacro pretty-tables-tests--with-images (&rest body)
-  "Run BODY as on a graphical display whose font is 10 pixels wide."
+  "Run BODY as on a graphical display whose font is 10 pixels wide.
+`pretty-tables-image-spacing' is 0, so the images are not copied;
+`pretty-tables-test-image-margin' tests the copy."
   (declare (indent 0) (debug t))
   `(cl-letf (((symbol-function 'display-images-p) #'always)
              ((symbol-function 'default-font-width) (lambda () 10)))
-     ,@body))
+     (let ((pretty-tables-image-spacing 0))
+       ,@body)))
+
+(ert-deftest pretty-tables-test-image-margin ()
+  "An image in a cell is copied with a vertical margin.
+The margin is half the option times the line height, here
+0.25 x 24 / 2 = 3 pixels.  The copy's ascent puts the image on the
+same baseline: for an image 30 pixels tall, its ascent plus 3 out of
+33 pixels, rounded up."
+  (cl-letf (((symbol-function 'default-line-height) (lambda () 24))
+            ((symbol-function 'image-size) (lambda (&rest _) '(40 . 30)))
+            ((symbol-function 'font-info)
+             (lambda (&rest _) [nil nil 0 20 0 0 0 0 16 4 0 0 nil nil]))
+            ((symbol-function 'face-font) (lambda (&rest _) "font")))
+    (let ((pretty-tables-image-spacing 0.25)
+          (margin (lambda (ascent)
+                    (let ((copy (pretty-tables--image-with-margin
+                                 `(image :type svg :data "<svg/>" :width 40
+                                         ,@(and ascent (list :ascent ascent))))))
+                      (list (image-property copy :margin)
+                            (image-property copy :ascent))))))
+      ;; 30 x 0.8 = 24, and 27 / 33 is 81.8%.
+      (should (equal (funcall margin 80) '((0 . 3) 82)))
+      ;; No `:ascent' is 50: 15, and 18 / 33 is 54.5%.
+      (should (equal (funcall margin nil) '((0 . 3) 55)))
+      ;; `center' with a font of ascent 16 and descent 4:
+      ;; (30 + 16 - 4 + 1) / 2 = 21, and 24 / 33 is 72.7%.
+      (should (equal (funcall margin 'center) '((0 . 3) 73)))
+      ;; An image with a margin, or the option 0, is left as it is.
+      (let ((image '(image :type svg :data "<svg/>" :width 40 :margin 2)))
+        (should (eq (pretty-tables--image-with-margin image) image)))
+      (let ((image pretty-tables-tests--image)
+            (pretty-tables-image-spacing 0))
+        (should (eq (pretty-tables--image-with-margin image) image)))
+      ;; The space after the image names the copy.
+      (cl-letf (((symbol-function 'default-font-width) (lambda () 10)))
+        (let* ((string (pretty-tables--image-string
+                        pretty-tables-tests--image 25 1))
+               (copy (get-text-property 0 'display string)))
+          (should (equal (image-property copy :margin) '(0 . 3)))
+          (should (eq (cdr (nth 2 (plist-get
+                                   (cdr (get-text-property 1 'display string))
+                                   :width)))
+                      copy)))))))
 
 (ert-deftest pretty-tables-test-visible-string-image ()
   "An image overlay with a width takes the columns that hold it."
@@ -449,6 +494,9 @@ There `font-lock-fontified' is nil, and `font-lock-flush' does nothing."
                   (pretty-tables-separator-spacing 0.25 t)
                   (pretty-tables-separator-spacing -1 nil)
                   (pretty-tables-separator-spacing "1" nil)
+                  (pretty-tables-image-spacing 0 t)
+                  (pretty-tables-image-spacing 0.25 t)
+                  (pretty-tables-image-spacing -1 nil)
                   (pretty-tables-reveal always t) (pretty-tables-reveal writable t)
                   (pretty-tables-reveal nil t) (pretty-tables-reveal yes nil)))
     (should (eq (and (safe-local-variable-p (nth 0 case) (nth 1 case)) t)

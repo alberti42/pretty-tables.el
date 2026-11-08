@@ -12,6 +12,10 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- The option `pretty-tables-image-spacing` (default 0.25): the space above and below an image in a cell, in units of the height of a line of text, split evenly above and below the image. An equation taller than a line of text no longer touches the rows above and below it. The space is a vertical `:margin` of the copy of the image that draws it, and the copy's `:ascent` keeps the image on the same baseline; an image that already has a `:margin` is left as it is.
+
 ## [0.5.0] - 2026-11-07
 
 ### Added

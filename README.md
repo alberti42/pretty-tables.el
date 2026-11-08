@@ -139,6 +139,7 @@ The options below and the faces belong to `pretty-tables`, so they apply to both
 |`pretty-tables-row-lines`       |`nil`  |Non-nil means a line is drawn under each data row but the last.              |
 |`pretty-tables-borders`         |`ascii`|How the lines between the cells of a drawn table are drawn: `ascii` or `lines`.|
 |`pretty-tables-separator-spacing`|`0.25`|Space between a row and the line of the separator row under it, in units of the height of a line of text. Used when `pretty-tables-borders` is `lines`.|
+|`pretty-tables-image-spacing`   |`0.25` |Space above and below an image in a cell of a drawn table, in units of the height of a line of text, split evenly above and below the image.|
 |`pretty-tables-reveal`          |`writable`|When the row point is on is shown as its raw text: `always`, `writable` (in a buffer that is not read-only) or `nil` (never). During an Isearch it is shown whatever the value.|
 
 Setting `fill-column` (`C-x f`) or one of these options draws the tables again in the buffers where a mode is on.
@@ -188,6 +189,8 @@ LaTeX equations in a table cell are drawn as images with [latex-to-svg](https://
 An equation takes the columns that hold its image, and its column is not narrowed below them. The row point is on shows the LaTeX source, as every raw row does. This needs latex-to-svg 0.21.0 or later, which requires latex-to-svg-backend 0.14.0; with earlier versions, a drawn row shows the LaTeX source.
 
 A package that shows text as an image, with an overlay whose `display` is the image, can have the image drawn in a table too. The image spec gives its width in pixels as `:width`, Emacs's own image property; the image is displayed at that width times its `:scale`. The image then takes the fewest columns that hold that width, and its column is not narrowed below them. Without a `:width` in pixels, or on a display that cannot show images, the cell shows the text under the overlay.
+
+An image in a cell is drawn with space above and below it, so an equation taller than a line of text, such as a fraction, does not touch the rows above and below it. The space is `pretty-tables-image-spacing` (default 0.25) times the height of a line of text, split evenly above and below the image. It is a vertical `:margin` of the copy of the image that draws it, and the copy's `:ascent` is changed so that the image stays on the same baseline. An image that already has a `:margin` is left as it is.
 
 A table is drawn when jit-lock reaches it, so an image that appears or changes after that is not in the drawing. The package then calls `jit-lock-refontify` from the start of that overlay, the one with the property `pretty-tables` that covers the image's text, and the table is drawn again at the next redisplay. Redisplay does not reach the text under a drawn row, so marking only the image's text does nothing until point enters the row. latex-to-svg does both for its equations.
 
