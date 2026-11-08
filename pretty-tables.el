@@ -122,7 +122,7 @@ below and the vertical lines cross the space."
   :type 'number
   :safe (lambda (value) (and (numberp value) (>= value 0))))
 
-(defcustom pretty-tables-image-spacing 0.25
+(defcustom pretty-tables-image-spacing 0.5
   "Most space above and below an image in a cell of a drawn table.
 In units of the height of a line of text, split evenly above and
 below the image.  An image gets this space only as far as it reaches
@@ -943,6 +943,12 @@ at the next redisplay, when the new value is in place."
         (when pretty-tables--adaptor
           (jit-lock-refontify))))))
 
+;; Added when the file loads, not by `pretty-tables-enable', so that
+;; loading a new version of the file in a running Emacs watches the
+;; options it adds, also in buffers where a mode is already on.
+(dolist (option pretty-tables--options)
+  (add-variable-watcher option #'pretty-tables--option-changed))
+
 (defun pretty-tables--theme-changed (_theme)
   "Draw the tables again after a theme is enabled or disabled.
 The drawn rows hold the backgrounds `pretty-tables--row-face' read
@@ -1021,9 +1027,9 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (remove-hook 'jit-lock-functions #'pretty-tables--fontify t)
   (add-hook 'jit-lock-functions #'pretty-tables--fontify 90 t)
   (add-hook 'post-command-hook #'pretty-tables--reveal nil t)
-  ;; `add-variable-watcher' adds a function only once.
-  (dolist (option (append pretty-tables--options
-                          (plist-get adaptor :options)))
+  ;; `add-variable-watcher' adds a function only once.  The watchers
+  ;; of `pretty-tables--options' are added when the file loads.
+  (dolist (option (plist-get adaptor :options))
     (add-variable-watcher option #'pretty-tables--option-changed))
   (add-hook 'enable-theme-functions #'pretty-tables--theme-changed)
   (add-hook 'disable-theme-functions #'pretty-tables--theme-changed)
@@ -1039,6 +1045,16 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (setq pretty-tables--revealed nil
         pretty-tables--adaptor nil)
   (font-lock-flush))
+
+(defun pretty-tables-unload-function ()
+  "Remove the variable watchers and the theme hooks the file added.
+The watchers are those of `pretty-tables--options'.  Called by
+`unload-feature'; nil means unloading continues."
+  (dolist (option pretty-tables--options)
+    (remove-variable-watcher option #'pretty-tables--option-changed))
+  (remove-hook 'enable-theme-functions #'pretty-tables--theme-changed)
+  (remove-hook 'disable-theme-functions #'pretty-tables--theme-changed)
+  nil)
 
 (provide 'pretty-tables)
 ;;; pretty-tables.el ends here

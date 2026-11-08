@@ -693,6 +693,14 @@ is read, as they do when jit-lock fontifies a window in chunks."
                              (pretty-tables-tests--faces row)))
                           (pretty-tables-tests--row-strings)))))
 
+(ert-deftest pretty-tables-test-options-watched-on-load ()
+  "Every option in `pretty-tables--options' is watched once the file loads.
+No mode needs to be turned on for that, so loading a new version of
+the file watches the options it adds."
+  (dolist (option pretty-tables--options)
+    (should (memq #'pretty-tables--option-changed
+                  (get-variable-watchers option)))))
+
 (defvar pretty-tables-tests--option nil
   "An option of the test adaptor, given in its `:options'.")
 
