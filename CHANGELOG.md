@@ -14,7 +14,7 @@ to `X.Y.Z`.
 
 ### Added
 
-- The option `pretty-tables-image-spacing` (default 0.25): the space above and below an image in a cell, in units of the height of a line of text, split evenly above and below the image. An equation taller than a line of text no longer touches the rows above and below it. The space is a vertical `:margin` of the copy of the image that draws it, and the copy's `:ascent` keeps the image on the same baseline; an image that already has a `:margin` is left as it is.
+- The option `pretty-tables-image-spacing` (default 0.25): the most space above and below an image in a cell, in units of the height of a line of text, split evenly above and below the image. An equation taller than a line of text no longer touches the rows above and below it. An image gets the space only as far as it reaches past the letters of the line, so one that fits in a line gets none: the option `pretty-tables-image-spacing-factor` (default 2) gives the pixels of space per pixel the image reaches past them; 0 gives no image space, t gives the most to every image that reaches past the letters, and nil gives every image the most. The space is a vertical `:margin` of the copy of the image that draws it, and the copy's `:ascent` keeps the image on the same baseline; an image that already has a `:margin` is left as it is.
 
 ## [0.5.0] - 2026-11-07
 

@@ -252,31 +252,67 @@ Batch mode cannot show it, so it is never loaded.")
      (let ((pretty-tables-image-spacing 0))
        ,@body)))
 
+(defvar pretty-tables-tests--image-height 30
+  "Height in pixels that `image-size' returns in the margin tests.")
+
 (ert-deftest pretty-tables-test-image-margin ()
-  "An image in a cell is copied with a vertical margin.
-The margin is half the option times the line height, here
-0.25 x 24 / 2 = 3 pixels.  The copy's ascent puts the image on the
-same baseline: for an image 30 pixels tall, its ascent plus 3 out of
-33 pixels, rounded up."
+  "An image that reaches past the font is copied with a vertical margin.
+The most margin is half the option times the line height, here
+0.25 x 24 / 2 = 3 pixels; the font has ascent 16 and descent 4.  The
+margin is the smaller of 3 and the factor times how far the image
+reaches past the font; the factor is 1 except where a case sets it.  The copy's ascent puts the image on the same baseline: its
+ascent plus the margin, out of its height plus the margin, rounded
+up."
   (cl-letf (((symbol-function 'default-line-height) (lambda () 24))
-            ((symbol-function 'image-size) (lambda (&rest _) '(40 . 30)))
+            ((symbol-function 'image-size)
+             (lambda (&rest _) (cons 40 pretty-tables-tests--image-height)))
             ((symbol-function 'font-info)
              (lambda (&rest _) [nil nil 0 20 0 0 0 0 16 4 0 0 nil nil]))
             ((symbol-function 'face-font) (lambda (&rest _) "font")))
     (let ((pretty-tables-image-spacing 0.25)
-          (margin (lambda (ascent)
-                    (let ((copy (pretty-tables--image-with-margin
-                                 `(image :type svg :data "<svg/>" :width 40
-                                         ,@(and ascent (list :ascent ascent))))))
-                      (list (image-property copy :margin)
-                            (image-property copy :ascent))))))
-      ;; 30 x 0.8 = 24, and 27 / 33 is 81.8%.
-      (should (equal (funcall margin 80) '((0 . 3) 82)))
-      ;; No `:ascent' is 50: 15, and 18 / 33 is 54.5%.
-      (should (equal (funcall margin nil) '((0 . 3) 55)))
-      ;; `center' with a font of ascent 16 and descent 4:
-      ;; (30 + 16 - 4 + 1) / 2 = 21, and 24 / 33 is 72.7%.
-      (should (equal (funcall margin 'center) '((0 . 3) 73)))
+          (pretty-tables-image-spacing-factor 1)
+          (margin (lambda (height ascent)
+                    (let* ((pretty-tables-tests--image-height height)
+                           (image `(image :type svg :data "<svg/>" :width 40
+                                          ,@(and ascent (list :ascent ascent))))
+                           (copy (pretty-tables--image-with-margin image)))
+                      (if (eq copy image)
+                          'unchanged
+                        (list (image-property copy :margin)
+                              (image-property copy :ascent)))))))
+      ;; 30 x 0.8 = 24, 8 past the ascent: the margin is 3, and 27 / 33
+      ;; is 81.8%.
+      (should (equal (funcall margin 30 80) '((0 . 3) 82)))
+      ;; No `:ascent' is 50: 15, and 15 below, 11 past the descent;
+      ;; 18 / 33 is 54.5%.
+      (should (equal (funcall margin 30 nil) '((0 . 3) 55)))
+      ;; `center': (30 + 16 - 4 + 1) / 2 = 21, 5 past the ascent;
+      ;; 24 / 33 is 72.7%.
+      (should (equal (funcall margin 30 'center) '((0 . 3) 73)))
+      ;; 18 x 0.8 = 14 above and 4 below: it fits, and gets no margin.
+      (should (eq (funcall margin 18 80) 'unchanged))
+      ;; 20 x 0.85 = 17, 1 past the ascent, and 3 below: the margin is
+      ;; 1, and 18 / 21 is 85.7%.
+      (should (equal (funcall margin 20 85) '((0 . 1) 86)))
+      ;; With the factor 2, the margin is 2: 19 / 22 is 86.4%.
+      (let ((pretty-tables-image-spacing-factor 2))
+        (should (equal (funcall margin 20 85) '((0 . 2) 87))))
+      ;; With 0, no image gets a margin.
+      (let ((pretty-tables-image-spacing-factor 0))
+        (should (eq (funcall margin 30 80) 'unchanged)))
+      ;; With t, or an infinite factor, an image past the font gets the
+      ;; most, and one that fits none.
+      (dolist (factor (list t 1.0e+INF))
+        (let ((pretty-tables-image-spacing-factor factor))
+          (should (equal (funcall margin 20 85) '((0 . 3) 87)))
+          (should (eq (funcall margin 18 80) 'unchanged))))
+      ;; With nil, every image gets the most, also one that fits:
+      ;; 17 / 21 is 81%.
+      (let ((pretty-tables-image-spacing-factor nil))
+        (should (equal (funcall margin 18 80) '((0 . 3) 81))))
+      ;; Without a font, the margin is the most.
+      (cl-letf (((symbol-function 'font-info) #'ignore))
+        (should (equal (funcall margin 18 80) '((0 . 3) 81))))
       ;; An image with a margin, or the option 0, is left as it is.
       (let ((image '(image :type svg :data "<svg/>" :width 40 :margin 2)))
         (should (eq (pretty-tables--image-with-margin image) image)))
@@ -497,6 +533,12 @@ There `font-lock-fontified' is nil, and `font-lock-flush' does nothing."
                   (pretty-tables-image-spacing 0 t)
                   (pretty-tables-image-spacing 0.25 t)
                   (pretty-tables-image-spacing -1 nil)
+                  (pretty-tables-image-spacing-factor 2 t)
+                  (pretty-tables-image-spacing-factor nil t)
+                  (pretty-tables-image-spacing-factor 0 t)
+                  (pretty-tables-image-spacing-factor t t)
+                  (pretty-tables-image-spacing-factor yes nil)
+                  (pretty-tables-image-spacing-factor -1 nil)
                   (pretty-tables-reveal always t) (pretty-tables-reveal writable t)
                   (pretty-tables-reveal nil t) (pretty-tables-reveal yes nil)))
     (should (eq (and (safe-local-variable-p (nth 0 case) (nth 1 case)) t)

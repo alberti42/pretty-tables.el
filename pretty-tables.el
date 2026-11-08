@@ -123,15 +123,35 @@ below and the vertical lines cross the space."
   :safe (lambda (value) (and (numberp value) (>= value 0))))
 
 (defcustom pretty-tables-image-spacing 0.25
-  "Space above and below an image in a cell of a drawn table.
+  "Most space above and below an image in a cell of a drawn table.
 In units of the height of a line of text, split evenly above and
-below the image.  The space is a vertical `:margin' of the copy of
-the image that draws it, so the image does not touch the rows above
-and below it, and its `:ascent' is changed so that it stays on the
-same baseline.  An image that already has a `:margin' is left as it
-is."
+below the image.  An image gets this space only as far as it reaches
+past the letters of the line: one that fits within the font's ascent
+and descent gets none, and one that reaches past them by a few pixels
+gets `pretty-tables-image-spacing-factor' times as many.  The space
+is a vertical `:margin' of the copy of the image that draws it, so a
+tall image does not touch the rows above and below it, and its
+`:ascent' is changed so that it stays on the same baseline.  An image
+that already has a `:margin' is left as it is."
   :type 'number
   :safe (lambda (value) (and (numberp value) (>= value 0))))
+
+(defcustom pretty-tables-image-spacing-factor 2
+  "Pixels of space per pixel an image reaches past the letters of the line.
+An image in a cell gets this factor times the number of pixels it
+reaches past the font's ascent or descent, as space above and below
+it, up to the most that `pretty-tables-image-spacing' gives.  0 means
+no space for any image.  t means the most space for every image that
+reaches past the font, and none for one that fits within it.  An
+image reaches past the font by a whole number of pixels, at least 1,
+so a factor at least as large as that most space in pixels, such as
+1000, gives the same result as t.  nil means the most space for every
+image, also one that fits."
+  :type '(choice (const :tag "The most space for every image" nil)
+                 (const :tag "The most space for an image past the font" t)
+                 number)
+  :safe (lambda (value) (or (booleanp value)
+                            (and (numberp value) (>= value 0)))))
 
 (defcustom pretty-tables-reveal 'writable
   "When the row point is on is shown as its raw text.
@@ -209,43 +229,72 @@ function again.")
 
 ;;; Reading the buffer
 
-(defun pretty-tables--image-ascent (image height)
+(defun pretty-tables--font-metrics ()
+  "Return (ASCENT . DESCENT) of the font of the `default' face, or nil.
+Nil when there is no such font, as in batch mode."
+  (when-let* ((font (font-info (face-font 'default))))
+    (cons (aref font 8) (aref font 9))))
+
+(defun pretty-tables--image-ascent (image height font)
   "Return the ascent in pixels of IMAGE, HEIGHT pixels tall, with no margin.
 It is computed as `image_ascent' in Emacs's image.c computes it: from
 the `:ascent' of IMAGE, a percentage, `center', or none, which stands
-for 50.  `center' uses the ascent and descent of the font of the
-`default' face."
+for 50.  `center' uses FONT, the (ASCENT . DESCENT) of
+`pretty-tables--font-metrics', or centres on HEIGHT when FONT is nil."
   (let ((ascent (or (image-property image :ascent) 50)))
     (if (eq ascent 'center)
-        (let ((font (font-info (face-font 'default))))
-          (if font
-              (floor (+ height (aref font 8) (- (aref font 9)) 1) 2)
-            (floor height 2)))
+        (if font
+            (floor (+ height (car font) (- (cdr font)) 1) 2)
+          (floor height 2))
       (truncate (* height (/ ascent 100.0))))))
 
 (defun pretty-tables--image-with-margin (image)
-  "Return a copy of IMAGE with the vertical margin of the option.
-The margin is M = `pretty-tables-image-spacing' times the height of a
-line of text, halved and rounded, above and below the image.  Emacs
+  "Return a copy of IMAGE with a vertical margin.
+S = `pretty-tables-image-spacing' times the height of a line of text,
+halved and rounded, is the most margin.  E is how many pixels the
+image reaches past the font of the `default' face: the image's ascent
+minus the font's, or its descent minus the font's, whichever is more,
+and 0 when the image fits within the font.  The margin is M, the
+smaller of S and `pretty-tables-image-spacing-factor' times E,
+rounded, above and below the image, so an image that fits in a line of
+text gets none, and its row is no taller than one of text.  With the
+factor t, M is S when E is not 0.  M is S when the factor is nil, and
+without a font, as in batch mode.  Emacs
 computes the ascent of an image with a margin from the image's height
 plus one margin, while the image takes its height plus two, so the
 copy's `:ascent' is the percentage that puts the image where it was
 without a margin: the image's own ascent plus M, out of its height
 plus M.  The percentage is rounded up, because Emacs truncates the
-ascent it computes from it.  IMAGE itself is returned when the option
-is 0 or IMAGE has a `:margin'."
-  (let ((margin (round (* pretty-tables-image-spacing (default-line-height))
-                       2)))
-    (if (or (<= margin 0) (image-property image :margin))
+ascent it computes from it.  IMAGE itself is returned when M is 0 or
+IMAGE has a `:margin'."
+  (let ((most (round (* pretty-tables-image-spacing (default-line-height))
+                     2)))
+    (if (or (<= most 0) (image-property image :margin))
         image
       (let* ((height (cdr (image-size image t)))
-             (ascent (+ (pretty-tables--image-ascent image height) margin))
-             (spec (copy-sequence (cdr image))))
-        (setq spec (plist-put spec :margin (cons 0 margin)))
-        (setq spec (plist-put spec :ascent
-                              (min 100 (max 0 (ceiling (* 100 ascent)
-                                                       (+ height margin))))))
-        (cons 'image spec)))))
+             (font (pretty-tables--font-metrics))
+             (own (pretty-tables--image-ascent image height font))
+             (factor pretty-tables-image-spacing-factor)
+             (overhang (if font
+                           (max 0 (- own (car font)) (- height own (cdr font)))
+                         0))
+             (margin (cond ((or (not font) (null factor)) most)
+                           ;; Before multiplying: a factor of
+                           ;; `1.0e+INF' times 0 is NaN.
+                           ((zerop overhang) 0)
+                           ((eq factor t) most)
+                           ;; The smaller first: `round' signals an
+                           ;; error on an infinite product.
+                           (t (round (min most (* factor overhang)))))))
+        (if (<= margin 0)
+            image
+          (let ((spec (copy-sequence (cdr image))))
+            (setq spec (plist-put spec :margin (cons 0 margin)))
+            (setq spec (plist-put
+                        spec :ascent
+                        (min 100 (max 0 (ceiling (* 100 (+ own margin))
+                                                 (+ height margin))))))
+            (cons 'image spec)))))))
 
 (defun pretty-tables--image-string (image width pos)
   "Return the string that shows IMAGE, WIDTH pixels wide, in a cell.
@@ -871,7 +920,8 @@ runs there."
     pretty-tables-row-lines
     pretty-tables-borders
     pretty-tables-separator-spacing
-    pretty-tables-image-spacing)
+    pretty-tables-image-spacing
+    pretty-tables-image-spacing-factor)
   "Variables the drawing of a table depends on.
 Setting one draws the tables again; see
 `pretty-tables--option-changed'.")
