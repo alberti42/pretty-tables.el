@@ -26,7 +26,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A commit pushed to develop and then to main starts this workflow twice.
+  # This job waits for the earlier run of the same commit and, when that
+  # run succeeded, the other jobs are skipped; see
+  # .github/scripts/skip-if-passed.sh.  On a pull request, or a run started
+  # by hand, they always run.
+  skip:
+    name: Earlier run of this commit
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    timeout-minutes: 30
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: check
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/skip-if-passed.sh ci.yml
+
   check:
+    needs: skip
+    if: needs.skip.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -111,6 +136,8 @@ jobs:
   # error when one is gone.  A change in Org is no failure of this package,
   # so the job may fail.  Add each new Emacs release to both matrices.
   org-table-shrink:
+    needs: skip
+    if: needs.skip.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
