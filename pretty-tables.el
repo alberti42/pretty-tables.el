@@ -63,10 +63,6 @@
 ;; Defines the `hl-line' face, whose background `pretty-tables-row' takes.
 (require 'hl-line)
 
-;; Defined in an Emacs built with image support; called only after
-;; `display-images-p' returned non-nil.
-(declare-function image-size "image.c" (spec &optional pixels frame))
-
 (defgroup pretty-tables nil
   "Aligned, wrapped display of tables."
   :group 'text
@@ -235,9 +231,11 @@ function again.")
 
 (defun pretty-tables--font-metrics ()
   "Return (ASCENT . DESCENT) of the font of the `default' face, or nil.
-Nil when there is no such font, as in batch mode."
-  (when-let* ((font (font-info (face-font 'default))))
-    (cons (aref font 8) (aref font 9))))
+Nil when there is no such font, as in batch mode, or no `font-info',
+as in an Emacs built without a window system."
+  (when (fboundp 'font-info)
+    (when-let* ((font (font-info (face-font 'default))))
+      (cons (aref font 8) (aref font 9)))))
 
 (defun pretty-tables--image-ascent (image height font)
   "Return the ascent in pixels of IMAGE, HEIGHT pixels tall, with no margin.
@@ -269,36 +267,38 @@ plus one margin, while the image takes its height plus two, so the
 copy's `:ascent' is the percentage that puts the image where it was
 without a margin: the image's own ascent plus M, out of its height
 plus M.  The percentage is rounded up, because Emacs truncates the
-ascent it computes from it.  IMAGE itself is returned when M is 0 or
-IMAGE has a `:margin'."
+ascent it computes from it.  IMAGE itself is returned when M is 0,
+IMAGE has a `:margin', or Emacs has no `image-size', as when it is
+built without image support."
   (let ((most (round (* pretty-tables-image-spacing (default-line-height))
                      2)))
-    (if (or (<= most 0) (image-property image :margin))
-        image
-      (let* ((height (cdr (image-size image t)))
-             (font (pretty-tables--font-metrics))
-             (own (pretty-tables--image-ascent image height font))
-             (factor pretty-tables-image-spacing-factor)
-             (overhang (if font
-                           (max 0 (- own (car font)) (- height own (cdr font)))
-                         0))
-             (margin (cond ((or (not font) (null factor)) most)
-                           ;; Before multiplying: a factor of
-                           ;; `1.0e+INF' times 0 is NaN.
-                           ((zerop overhang) 0)
-                           ((eq factor t) most)
-                           ;; The smaller first: `round' signals an
-                           ;; error on an infinite product.
-                           (t (round (min most (* factor overhang)))))))
-        (if (<= margin 0)
-            image
-          (let ((spec (copy-sequence (cdr image))))
-            (setq spec (plist-put spec :margin (cons 0 margin)))
-            (setq spec (plist-put
-                        spec :ascent
-                        (min 100 (max 0 (ceiling (* 100 (+ own margin))
-                                                 (+ height margin))))))
-            (cons 'image spec)))))))
+    (if (and (> most 0) (not (image-property image :margin))
+             (fboundp 'image-size))
+        (let* ((height (cdr (image-size image t)))
+               (font (pretty-tables--font-metrics))
+               (own (pretty-tables--image-ascent image height font))
+               (factor pretty-tables-image-spacing-factor)
+               (overhang (if font
+                             (max 0 (- own (car font)) (- height own (cdr font)))
+                           0))
+               (margin (cond ((or (not font) (null factor)) most)
+                             ;; Before multiplying: a factor of
+                             ;; `1.0e+INF' times 0 is NaN.
+                             ((zerop overhang) 0)
+                             ((eq factor t) most)
+                             ;; The smaller first: `round' signals an
+                             ;; error on an infinite product.
+                             (t (round (min most (* factor overhang)))))))
+          (if (<= margin 0)
+              image
+            (let ((spec (copy-sequence (cdr image))))
+              (setq spec (plist-put spec :margin (cons 0 margin)))
+              (setq spec (plist-put
+                          spec :ascent
+                          (min 100 (max 0 (ceiling (* 100 (+ own margin))
+                                                   (+ height margin))))))
+              (cons 'image spec))))
+      image)))
 
 (defun pretty-tables--image-string (image width pos)
   "Return the string that shows IMAGE, WIDTH pixels wide, in a cell.
