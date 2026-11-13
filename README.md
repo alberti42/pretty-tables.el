@@ -72,6 +72,8 @@ The screenshot shows [`examples/field-guide.md`](examples/field-guide.md) in a g
 
 ![The table of examples/field-guide.org drawn by pretty-tables-for-org-mode](Screenshot-org.png)
 
+The two screenshots above are drawn with *pretty-tables-borders* set to `lines`. With its default, `ascii`, the lines between the cells are drawn with the characters `|`, `-` and `+`, or those of the adaptor's separator row: see the same files drawn [in Markdown](Screenshot-ascii-md.png) and [in Org](Screenshot-ascii-org.png).
+
 ## Requirements
 
 - Emacs 31.1 or later.
