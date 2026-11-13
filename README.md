@@ -31,48 +31,17 @@ The pipe tables of GitHub Flavored Markdown, which *markdown-ts-mode* reads, hav
 
 ## Example
 
-[`examples/field-guide.md`](examples/field-guide.md) holds an invented field guide. Markdown writes each table row on one line, so in a window 72 columns wide, with long lines wrapped, its first two data rows look like this:
+[`examples/field-guide.md`](examples/field-guide.md) and [`examples/field-guide.org`](examples/field-guide.org) hold the same invented field guide, in Markdown and in Org. The screenshots show them in a graphical frame, with the doom-opera-light theme, *fill-column* set to 100, *pretty-tables-borders* set to `lines`, and in Markdown the markup hidden with `C-c C-x C-m` (*markdown-ts-toggle-hide-markup*). The formulas of the second table are drawn by *latex-to-svg-for-markdown-mode* and *latex-to-svg-for-org-mode*.
 
-```markdown
-| Creature | Habitat | Guide entry | Last sighting |
-|---|---|---|---|
-| Ash dragon | Volcanic caves above the [Cinder
-Pass](atlas/regions/cinder-pass.md#caves) | [Ash dragons and their
-hoards](bestiary/dragons.md#ash-dragon); [Fire safety for
-travellers](handbook/fire.md#dragons) | Spring 1123, by the ranger
-[Ilse Morrow](people/rangers.md#ilse-morrow) |
-| Marsh kraken | Deep pools of the [Sallow
-Fens](atlas/regions/sallow-fens.md#pools) | [The kraken of fresh
-water](bestiary/sea-beasts.md#marsh-kraken) | A capsized ferry at
-[Reedmouth](atlas/towns/reedmouth.md#harbour), autumn 1122 |
-```
+**markdown-ts-mode**
 
-With *markdown-ts-hide-markup* on and *fill-column* set to 72, *pretty-tables-for-markdown-mode* draws those rows as:
+![The tables of examples/field-guide.md drawn by pretty-tables-for-markdown-mode](Screenshot-md.png)
 
-```text
-| Creature       | Habitat         | Guide entry     | Last sighting   |
-|----------------|-----------------|-----------------|-----------------|
-| Ash dragon     | Volcanic caves  | Ash dragons and | Spring 1123, by |
-|                | above the       | their hoards;   | the ranger Ilse |
-|                | Cinder Pass     | Fire safety for | Morrow          |
-|                |                 | travellers      |                 |
-| Marsh kraken   | Deep pools of   | The kraken of   | A capsized      |
-|                | the Sallow Fens | fresh water     | ferry at        |
-|                |                 |                 | Reedmouth,      |
-|                |                 |                 | autumn 1122     |
-```
+**org-mode**
 
-The link labels keep the faces *markdown-ts-mode* gives them, and clicking one follows the link. Data rows are drawn with alternating backgrounds, which a text block cannot show; the screenshot below shows them.
+![The tables of examples/field-guide.org drawn by pretty-tables-for-org-mode](Screenshot-org.png)
 
-![The table of examples/field-guide.md drawn by pretty-tables-for-markdown-mode](Screenshot-md.png)
-
-The screenshot shows [`examples/field-guide.md`](examples/field-guide.md) in a graphical frame, with the doom-opera-light theme, *fill-column* set to 100, *pretty-tables-borders* set to `lines`, and markup hidden with `C-c C-x C-m` (*markdown-ts-toggle-hide-markup*). The formulas of the second table are drawn by *latex-to-svg-for-markdown-mode*.
-
-[`examples/field-guide.org`](examples/field-guide.org) holds the same table in Org, aligned by *org-table-align*. The screenshot below shows it drawn by *pretty-tables-for-org-mode*, with the same theme and options, and the formulas drawn by *latex-to-svg-for-org-mode*.
-
-![The table of examples/field-guide.org drawn by pretty-tables-for-org-mode](Screenshot-org.png)
-
-The two screenshots above are drawn with *pretty-tables-borders* set to `lines`. With its default, `ascii`, the lines between the cells are drawn with the characters `|`, `-` and `+`, or those of the adaptor's separator row: see the same files drawn [in Markdown](Screenshot-ascii-md.png) and [in Org](Screenshot-ascii-org.png).
+With *pretty-tables-borders* at its default, `ascii`, the lines between the cells are drawn with the characters `|`, `-` and `+`, or those of the adaptor's separator row: see the same files drawn [in Markdown](Screenshot-ascii-md.png) and [in Org](Screenshot-ascii-org.png).
 
 ## Requirements
 
