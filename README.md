@@ -41,7 +41,20 @@ The pipe tables of GitHub Flavored Markdown, which *markdown-ts-mode* reads, hav
 
 ![The tables of examples/field-guide.org drawn by pretty-tables-for-org-mode](Screenshot-org.png)
 
-With *pretty-tables-borders* at its default, `ascii`, the lines between the cells are drawn with the characters `|`, `-` and `+`, or those of the adaptor's separator row: see the same files drawn [in Markdown](Screenshot-ascii-md.png) and [in Org](Screenshot-ascii-org.png).
+With *pretty-tables-borders* at its default, `ascii`, the lines between the cells are drawn with the characters `|`, `-` and `+`, or those of the adaptor's separator row.
+
+<details>
+<summary>The same tables drawn with <code>ascii</code></summary>
+
+**markdown-ts-mode**
+
+![The tables of examples/field-guide.md drawn by pretty-tables-for-markdown-mode with ascii borders](Screenshot-ascii-md.png)
+
+**org-mode**
+
+![The tables of examples/field-guide.org drawn by pretty-tables-for-org-mode with ascii borders](Screenshot-ascii-org.png)
+
+</details>
 
 ## Requirements
 
