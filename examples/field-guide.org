@@ -3,7 +3,9 @@
 An example document for =pretty-tables-for-org-mode=. The guild, the
 places and the creatures are invented; the table is shaped like real
 ones, where most cells link to other documents. It is wider than
-=fill-column=, and its cells hold one or two links each.
+=fill-column=, and its cells hold one or two links each. The second
+table holds LaTeX formulas, which =latex-to-svg-for-org-mode= draws as
+images.
 
 The linked files are not included, so the links do not open anything.
 They are not needed to show the problem: =org-table-align= pads each
@@ -23,6 +25,14 @@ than =fill-column=, with the cells word-wrapped.
 | Phoenix      | Unknown; it is seen only while it burns | [[file:bestiary/winged.org::*Phoenix][The phoenix question]]; [[https://example.org/guild/lectures/phoenix/][Lecture notes]]                      | Once, in 1098, over the old capital                   |
 | Mimic        | Any dungeon with a treasure chest in it | [[file:bestiary/oddities.org::*Mimic][Mimics]]; [[file:handbook/dungeons.org::*Chests][Opening chests safely]]                            | Last week, in the guild's own storeroom               |
 | Stone golem  | The gate of the ruins of [[file:atlas/ruins/old-varn.org::*Gate][Old Varn]]       | [[file:bestiary/constructs.org::*Stone golem][Golems and their makers]]                                  | Standing at the gate, as it has for 300 years         |
+
+* From the guild's spell book
+
+| Spell                   | Formula                                                        | Effect                                                                                   |
+|-------------------------+----------------------------------------------------------------+------------------------------------------------------------------------------------------|
+| Ward of the cold circle | $\oint_{\partial C} \vec{q} \cdot \hat{n}\,\mathrm{d}\ell = 0$ | No heat crosses a circle drawn round a camp. Taught with [[file:handbook/fire.org::*Dragons][Fire safety for travellers]].     |
+| Counting charm          | $\int_{\text{dusk}}^{\text{dawn}} \lambda(t)\,\mathrm{d}t$     | Counts the lights over a bog in one night. The guild stopped casting it in 1120.         |
+| Waking word             | $\frac{\mathrm{d}x}{\mathrm{d}t} > 0$                          | Wakes a stone golem. Said at the gate of [[file:atlas/ruins/old-varn.org::*Gate][Old Varn]] every spring; the golem has not moved. |
 
 # Local Variables:
 # flycheck-disabled-checkers: (org-lint)

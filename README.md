@@ -12,7 +12,7 @@
 
 Each mode is a buffer-local minor mode, and nothing of *markdown-ts-mode* or *org-mode* is replaced. *pretty-tables-for-org* advises *org-table-expand* and *org-table--shrink-columns*, so a table is drawn again when a column is shrunk or expanded.
 
-Column widths come from the text a reader sees in each cell: characters that are invisible (for example link markup hidden by *markdown-ts-hide-markup*, or the hidden part of an Org link) take no room. When the table is wider than *pretty-tables-width*, the widest columns are narrowed and their cells are word-wrapped onto several screen lines. In Markdown, `<br>` in a cell starts a new line.
+Column widths come from the text a reader sees in each cell: characters that are invisible (for example link markup hidden by *markdown-ts-hide-markup*, or the hidden part of an Org link) take no room. When the table is wider than *pretty-tables-width*, the widest columns are narrowed and their cells are word-wrapped onto several screen lines. In Markdown, `<br>` in a cell starts a new line. LaTeX equations in a table cell are drawn as images with [*latex-to-svg*](https://github.com/alberti42/latex-to-svg); see [Images in cells](#images-in-cells).
 
 *pretty-tables-for-markdown* was called *markdown-table-view* up to version 0.1.0. [`CHANGELOG.md`](CHANGELOG.md) lists the names that changed.
 
@@ -66,9 +66,9 @@ The link labels keep the faces *markdown-ts-mode* gives them, and clicking one f
 
 ![The table of examples/field-guide.md drawn by pretty-tables-for-markdown-mode](Screenshot-md.png)
 
-The screenshot shows [`examples/field-guide.md`](examples/field-guide.md) in a graphical frame, with the doom-opera-light theme, *fill-column* set to 72, and markup hidden with `C-c C-x C-m` (*markdown-ts-toggle-hide-markup*).
+The screenshot shows [`examples/field-guide.md`](examples/field-guide.md) in a graphical frame, with the doom-opera-light theme, *fill-column* set to 100, *pretty-tables-borders* set to `lines`, and markup hidden with `C-c C-x C-m` (*markdown-ts-toggle-hide-markup*). The formulas of the second table are drawn by *latex-to-svg-for-markdown-mode*.
 
-[`examples/field-guide.org`](examples/field-guide.org) holds the same table in Org, aligned by *org-table-align*. The screenshot below shows it drawn by *pretty-tables-for-org-mode*, with the same theme and *fill-column* set to 72.
+[`examples/field-guide.org`](examples/field-guide.org) holds the same table in Org, aligned by *org-table-align*. The screenshot below shows it drawn by *pretty-tables-for-org-mode*, with the same theme and options, and the formulas drawn by *latex-to-svg-for-org-mode*.
 
 ![The table of examples/field-guide.org drawn by pretty-tables-for-org-mode](Screenshot-org.png)
 
