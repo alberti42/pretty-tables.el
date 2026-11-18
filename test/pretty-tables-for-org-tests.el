@@ -25,6 +25,7 @@
 ;;; Code:
 
 (require 'ert)
+(require 'cl-lib)
 (require 'pretty-tables-for-org)
 
 ;;; Helpers
@@ -139,6 +140,20 @@ Font-lock and `pretty-tables-for-org-mode' are on, the table width is
   (pretty-tables-for-org-tests--with-buffer
       "* Title\n\n| a | b |\n|---+---|\n| x | one two three four |\n"
     (setq-local pretty-tables-width 20)
+    (jit-lock-fontify-now)
+    (should (equal (pretty-tables-for-org-tests--rows)
+                   '("| a | b            |"
+                     "|---+--------------|"
+                     "| x | one two      |\n|   | three four   |")))))
+
+(ert-deftest pretty-tables-for-org-test-window-width ()
+  "With `pretty-tables-width' at `window', the table fits the window."
+  (pretty-tables-for-org-tests--with-buffer
+      "* Title\n\n| a | b |\n|---+---|\n| x | one two three four |\n"
+    (setq-local pretty-tables-width 'window
+                pretty-tables-min-column-width 1)
+    (cl-letf (((symbol-function 'pretty-tables--window-width) (lambda () 20)))
+      (pretty-tables--window-size-changed (selected-window)))
     (jit-lock-fontify-now)
     (should (equal (pretty-tables-for-org-tests--rows)
                    '("| a | b            |"

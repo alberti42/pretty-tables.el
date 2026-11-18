@@ -70,8 +70,20 @@
 
 (defcustom pretty-tables-width nil
   "Maximum width, in columns, of a displayed table.
-When nil, use `fill-column'."
-  :type '(choice (const :tag "fill-column" nil) natnum)
+When nil, use `fill-column'.  When `window', use the width of the
+narrowest window showing the buffer, at most `pretty-tables-max-width',
+and draw the tables again when that width changes; in a buffer no
+window shows, use `fill-column'.  A table is never narrower than its
+columns at `pretty-tables-min-column-width'."
+  :type '(choice (const :tag "fill-column" nil)
+                 (const :tag "Window width" window)
+                 natnum)
+  :safe (lambda (value) (or (null value) (eq value 'window) (natnump value))))
+
+(defcustom pretty-tables-max-width nil
+  "Most width, in columns, of a table when `pretty-tables-width' is `window'.
+When nil, the table may be as wide as the window."
+  :type '(choice (const :tag "No bound" nil) natnum)
   :safe (lambda (value) (or (null value) (natnump value))))
 
 (defcustom pretty-tables-min-column-width 8
@@ -415,6 +427,37 @@ no column is wider than its floor."
                     floors)
     (when best
       (setf (nth best widths) (1- (nth best widths))))))
+
+(defun pretty-tables--min-table-width (ncols)
+  "Return the width of a table of NCOLS columns at their floor.
+The floor is `pretty-tables-min-column-width', below which
+`pretty-tables--column-widths' narrows no column."
+  (+ (* ncols (+ pretty-tables-min-column-width 3)) 1))
+
+(defun pretty-tables--window-width ()
+  "Return the columns of the narrowest window showing the buffer, or nil."
+  (when-let* ((windows (get-buffer-window-list nil 'nomini t)))
+    (apply #'min (mapcar #'window-max-chars-per-line windows))))
+
+(defvar-local pretty-tables--window-columns nil
+  "The value of `pretty-tables--window-width' when the windows last changed.
+Kept so that drawing a table, which runs during redisplay, reads no
+window.")
+
+(defun pretty-tables--target-width (ncols)
+  "Return the width a table of NCOLS columns is drawn to fit.
+See `pretty-tables-width'."
+  (pcase pretty-tables-width
+    ('nil fill-column)
+    ('window
+     (let ((width pretty-tables--window-columns))
+       (if (null width)
+           fill-column
+         (max (pretty-tables--min-table-width ncols)
+              (if pretty-tables-max-width
+                  (min width pretty-tables-max-width)
+                width)))))
+    (width width)))
 
 (defun pretty-tables--column-widths (natural target &optional minimums images)
   "Narrow the NATURAL column widths until the table fits TARGET columns.
@@ -760,7 +803,7 @@ the space of `pretty-tables--add-spacing'."
                                           data)))
                          (number-sequence 0 (1- ncols))))
          (widths (pretty-tables--column-widths
-                  natural (or pretty-tables-width fill-column)
+                  natural (pretty-tables--target-width ncols)
                   (plist-get table :min-widths) images))
          (alignments (let ((a (plist-get table :alignments)))
                        (mapcar (lambda (i) (or (nth i a) 'left))
@@ -919,6 +962,7 @@ runs there."
 (defconst pretty-tables--options
   '(fill-column
     pretty-tables-width
+    pretty-tables-max-width
     pretty-tables-min-column-width
     pretty-tables-stripe-rows
     pretty-tables-row-lines
@@ -952,6 +996,17 @@ at the next redisplay, when the new value is in place."
 ;; options it adds, also in buffers where a mode is already on.
 (dolist (option pretty-tables--options)
   (add-variable-watcher option #'pretty-tables--option-changed))
+
+(defun pretty-tables--window-size-changed (_window)
+  "Update `pretty-tables--window-columns' when the windows change.
+When it changes and `pretty-tables-width' is `window', draw the tables
+again.  Runs from the local value of `window-size-change-functions',
+which also runs when a window starts showing the buffer."
+  (let ((width (pretty-tables--window-width)))
+    (unless (eql width pretty-tables--window-columns)
+      (setq pretty-tables--window-columns width)
+      (when (eq pretty-tables-width 'window)
+        (jit-lock-refontify)))))
 
 (defun pretty-tables--theme-changed (_theme)
   "Draw the tables again after a theme is enabled or disabled.
@@ -1031,6 +1086,9 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (remove-hook 'jit-lock-functions #'pretty-tables--fontify t)
   (add-hook 'jit-lock-functions #'pretty-tables--fontify 90 t)
   (add-hook 'post-command-hook #'pretty-tables--reveal nil t)
+  (add-hook 'window-size-change-functions
+            #'pretty-tables--window-size-changed nil t)
+  (setq pretty-tables--window-columns (pretty-tables--window-width))
   ;; `add-variable-watcher' adds a function only once.  The watchers
   ;; of `pretty-tables--options' are added when the file loads.
   (dolist (option (plist-get adaptor :options))
@@ -1045,8 +1103,11 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   "Stop drawing the tables of the current buffer, and show their text."
   (jit-lock-unregister #'pretty-tables--fontify)
   (remove-hook 'post-command-hook #'pretty-tables--reveal t)
+  (remove-hook 'window-size-change-functions
+               #'pretty-tables--window-size-changed t)
   (pretty-tables--delete-overlays (point-min) (point-max))
-  (setq pretty-tables--revealed nil
+  (setq pretty-tables--window-columns nil
+        pretty-tables--revealed nil
         pretty-tables--adaptor nil)
   (font-lock-flush))
 

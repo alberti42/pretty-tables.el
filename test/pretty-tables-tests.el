@@ -519,6 +519,10 @@ There `font-lock-fontified' is nil, and `font-lock-flush' does nothing."
 (ert-deftest pretty-tables-test-safe-local-variables ()
   "The options are safe as file-local variables with a value of their type."
   (dolist (case '((pretty-tables-width nil t) (pretty-tables-width 72 t)
+                  (pretty-tables-width window t) (pretty-tables-width fill nil)
+                  (pretty-tables-max-width nil t) (pretty-tables-max-width 120 t)
+                  (pretty-tables-max-width window nil)
+                  (pretty-tables-max-width -1 nil)
                   (pretty-tables-width -1 nil) (pretty-tables-width "72" nil)
                   (pretty-tables-min-column-width 8 t)
                   (pretty-tables-min-column-width -1 nil)
@@ -646,6 +650,76 @@ is read, as they do when jit-lock fontifies a window in chunks."
     (jit-lock-fontify-now)
     (should (equal (car (last (pretty-tables-tests--rows)))
                    "| x | one two      |\n|   | three four   |"))))
+
+;;; Window width
+
+(ert-deftest pretty-tables-test-target-width ()
+  "The target width follows `pretty-tables-width'."
+  (with-temp-buffer
+    (setq-local fill-column 70
+                pretty-tables-min-column-width 8
+                pretty-tables--window-columns 100)
+    (let ((pretty-tables-width nil))
+      (should (= (pretty-tables--target-width 3) 70)))
+    (let ((pretty-tables-width 40))
+      (should (= (pretty-tables--target-width 3) 40)))
+    (let ((pretty-tables-width 'window)
+          (pretty-tables-max-width nil))
+      (should (= (pretty-tables--target-width 3) 100)))))
+
+(ert-deftest pretty-tables-test-target-width-bounds ()
+  "The window width is bounded above and below.
+Above by `pretty-tables-max-width', below by the width of the table's
+columns at `pretty-tables-min-column-width'."
+  (with-temp-buffer
+    (setq-local fill-column 70
+                pretty-tables-width 'window
+                pretty-tables-min-column-width 8)
+    (should (= (pretty-tables--min-table-width 3) 34))
+    (dolist (case '((100 nil 3 100)    ; No upper bound.
+                    (100 90 3 90)      ; Upper bound.
+                    (60 90 3 60)       ; Window under the upper bound.
+                    (20 nil 3 34)      ; Lower bound: 3 * (8 + 3) + 1.
+                    (20 10 3 34)       ; The lower bound wins.
+                    (20 nil 1 20)      ; One column fits the window.
+                    (nil 90 3 70)))    ; No window: `fill-column'.
+      (setq-local pretty-tables--window-columns (nth 0 case)
+                  pretty-tables-max-width (nth 1 case))
+      (should (= (pretty-tables--target-width (nth 2 case)) (nth 3 case))))))
+
+(ert-deftest pretty-tables-test-window-width ()
+  "The window width is that of the narrowest window showing the buffer."
+  (pretty-tables-tests--with-buffer "| a |\n"
+    (should-not (pretty-tables--window-width))
+    (save-window-excursion
+      (delete-other-windows)
+      (set-window-buffer nil (current-buffer))
+      (let ((full (pretty-tables--window-width)))
+        (should (= full (window-max-chars-per-line)))
+        (set-window-buffer (split-window-right) (current-buffer))
+        (should (< (pretty-tables--window-width) full))))))
+
+(ert-deftest pretty-tables-test-window-size-redraws ()
+  "With `pretty-tables-width' at `window', a resize draws the table again."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n| a | b |\n|---|---|\n| x | one two three four |\n"
+    (setq-local pretty-tables-width 'window
+                pretty-tables-min-column-width 1)
+    (should (memq #'pretty-tables--window-size-changed
+                  window-size-change-functions))
+    (cl-letf (((symbol-function 'pretty-tables--window-width) (lambda () 80)))
+      (pretty-tables--window-size-changed (selected-window)))
+    (jit-lock-fontify-now)
+    (should (equal (car (last (pretty-tables-tests--rows)))
+                   "| x | one two three four |"))
+    (cl-letf (((symbol-function 'pretty-tables--window-width) (lambda () 20)))
+      (pretty-tables--window-size-changed (selected-window)))
+    (jit-lock-fontify-now)
+    (should (equal (car (last (pretty-tables-tests--rows)))
+                   "| x | one two      |\n|   | three four   |"))
+    (pretty-tables-disable)
+    (should-not (memq #'pretty-tables--window-size-changed
+                      window-size-change-functions))))
 
 ;; Batch frames have no colours, so the faces whose background the data
 ;; rows take get one for the tests.
