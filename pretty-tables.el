@@ -73,8 +73,11 @@
 When nil, use `fill-column'.  When `window', use the width of the
 narrowest window showing the buffer, at most `pretty-tables-max-width',
 and draw the tables again when that width changes; in a buffer no
-window shows, use `fill-column'.  A table is never narrower than its
-columns at `pretty-tables-min-column-width'."
+window shows, use `fill-column'.
+The width bounds how far columns are narrowed; no column is narrowed
+below its floor (see `pretty-tables--column-widths'), so a table whose
+columns are at their floors can be wider than this width, and a table
+narrower than it is not widened."
   :type '(choice (const :tag "fill-column" nil)
                  (const :tag "Window width" window)
                  natnum)
@@ -82,7 +85,8 @@ columns at `pretty-tables-min-column-width'."
 
 (defcustom pretty-tables-max-width nil
   "Most width, in columns, of a table when `pretty-tables-width' is `window'.
-When nil, the table may be as wide as the window."
+When nil, the table may be as wide as the window.  Like the window
+width, it narrows no column below its floor."
   :type '(choice (const :tag "No bound" nil) natnum)
   :safe (lambda (value) (or (null value) (natnump value))))
 
@@ -428,12 +432,6 @@ no column is wider than its floor."
     (when best
       (setf (nth best widths) (1- (nth best widths))))))
 
-(defun pretty-tables--min-table-width (ncols)
-  "Return the width of a table of NCOLS columns at their floor.
-The floor is `pretty-tables-min-column-width', below which
-`pretty-tables--column-widths' narrows no column."
-  (+ (* ncols (+ pretty-tables-min-column-width 3)) 1))
-
 (defun pretty-tables--window-width ()
   "Return the columns of the narrowest window showing the buffer, or nil."
   (when-let* ((windows (get-buffer-window-list nil 'nomini t)))
@@ -444,19 +442,19 @@ The floor is `pretty-tables-min-column-width', below which
 Kept so that drawing a table, which runs during redisplay, reads no
 window.")
 
-(defun pretty-tables--target-width (ncols)
-  "Return the width a table of NCOLS columns is drawn to fit.
-See `pretty-tables-width'."
+(defun pretty-tables--target-width (prefix)
+  "Return the width a table is drawn to fit.
+PREFIX is the width of the widest prefix of its rows, which takes
+window columns before the table.  See `pretty-tables-width'."
   (pcase pretty-tables-width
     ('nil fill-column)
     ('window
-     (let ((width pretty-tables--window-columns))
-       (if (null width)
-           fill-column
-         (max (pretty-tables--min-table-width ncols)
-              (if pretty-tables-max-width
-                  (min width pretty-tables-max-width)
-                width)))))
+     (if-let* ((width pretty-tables--window-columns))
+         (let ((width (- width prefix)))
+           (if pretty-tables-max-width
+               (min width pretty-tables-max-width)
+             width))
+       fill-column))
     (width width)))
 
 (defun pretty-tables--column-widths (natural target &optional minimums images)
@@ -802,8 +800,15 @@ the space of `pretty-tables--add-spacing'."
                                                            (nth i cells))))
                                           data)))
                          (number-sequence 0 (1- ncols))))
+         (prefixes (mapcar (lambda (row)
+                             (funcall (or (plist-get pretty-tables--adaptor
+                                                     :prefix)
+                                          #'pretty-tables--prefix)
+                                      (plist-get row :beg)))
+                           rows))
          (widths (pretty-tables--column-widths
-                  natural (pretty-tables--target-width ncols)
+                  natural (pretty-tables--target-width
+                           (apply #'max 0 (mapcar #'string-width prefixes)))
                   (plist-get table :min-widths) images))
          (alignments (let ((a (plist-get table :alignments)))
                        (mapcar (lambda (i) (or (nth i a) 'left))
@@ -821,7 +826,7 @@ the space of `pretty-tables--add-spacing'."
                            (cons nil kinds) kinds))
          (index -1))
     (seq-mapn
-     (lambda (row cells hide underline)
+     (lambda (row cells hide underline prefix)
        (let* ((beg (plist-get row :beg))
               (end (plist-get row :end))
               (kind (plist-get row :kind))
@@ -855,25 +860,22 @@ the space of `pretty-tables--add-spacing'."
          (when table-face
            (add-face-text-property 0 (length string) table-face t string))
          (unless hide
-           (let ((prefix (funcall (or (plist-get pretty-tables--adaptor :prefix)
-                                      #'pretty-tables--prefix)
-                                  beg)))
-             (add-text-properties 0 (length string)
-                                  (list 'keymap pretty-tables-row-map
-                                        'pointer 'arrow
-                                        'line-prefix prefix
-                                        'wrap-prefix prefix)
-                                  string)
-             ;; Point at the start of a drawn row shows the cursor at the
-             ;; start of the string, not after it.
-             (put-text-property 0 1 'cursor t string)))
+           (add-text-properties 0 (length string)
+                                (list 'keymap pretty-tables-row-map
+                                      'pointer 'arrow
+                                      'line-prefix prefix
+                                      'wrap-prefix prefix)
+                                string)
+           ;; Point at the start of a drawn row shows the cursor at the
+           ;; start of the string, not after it.
+           (put-text-property 0 1 'cursor t string))
          (overlay-put ov 'pretty-tables t)
          (overlay-put ov 'pretty-tables-string string)
          (overlay-put ov 'evaporate t)
          (if (eql beg revealed)
              (setq pretty-tables--revealed ov)
            (pretty-tables--show-drawn ov t))))
-     rows data hidden (append (cdr hidden) (list nil)))))
+     rows data hidden (append (cdr hidden) (list nil)) prefixes)))
 
 (defun pretty-tables--fontify (beg end)
   "Draw every table that overlaps BEG to END.
@@ -997,16 +999,26 @@ at the next redisplay, when the new value is in place."
 (dolist (option pretty-tables--options)
   (add-variable-watcher option #'pretty-tables--option-changed))
 
-(defun pretty-tables--window-size-changed (_window)
-  "Update `pretty-tables--window-columns' when the windows change.
+(defun pretty-tables--update-window-columns ()
+  "Update `pretty-tables--window-columns' of the current buffer.
 When it changes and `pretty-tables-width' is `window', draw the tables
-again.  Runs from the local value of `window-size-change-functions',
-which also runs when a window starts showing the buffer."
+again."
   (let ((width (pretty-tables--window-width)))
     (unless (eql width pretty-tables--window-columns)
       (setq pretty-tables--window-columns width)
       (when (eq pretty-tables-width 'window)
         (jit-lock-refontify)))))
+
+(defun pretty-tables--windows-changed (_frame)
+  "Update `pretty-tables--window-columns' in every buffer an adaptor is on.
+Runs from the default values of `window-size-change-functions' and
+`window-buffer-change-functions'.  Their buffer-local values would not
+run for a buffer when a window stops showing it, which can widen the
+narrowest window that still does."
+  (dolist (buffer (buffer-list))
+    (when (buffer-local-value 'pretty-tables--adaptor buffer)
+      (with-current-buffer buffer
+        (pretty-tables--update-window-columns)))))
 
 (defun pretty-tables--theme-changed (_theme)
   "Draw the tables again after a theme is enabled or disabled.
@@ -1086,8 +1098,8 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (remove-hook 'jit-lock-functions #'pretty-tables--fontify t)
   (add-hook 'jit-lock-functions #'pretty-tables--fontify 90 t)
   (add-hook 'post-command-hook #'pretty-tables--reveal nil t)
-  (add-hook 'window-size-change-functions
-            #'pretty-tables--window-size-changed nil t)
+  (add-hook 'window-size-change-functions #'pretty-tables--windows-changed)
+  (add-hook 'window-buffer-change-functions #'pretty-tables--windows-changed)
   (setq pretty-tables--window-columns (pretty-tables--window-width))
   ;; `add-variable-watcher' adds a function only once.  The watchers
   ;; of `pretty-tables--options' are added when the file loads.
@@ -1103,8 +1115,6 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   "Stop drawing the tables of the current buffer, and show their text."
   (jit-lock-unregister #'pretty-tables--fontify)
   (remove-hook 'post-command-hook #'pretty-tables--reveal t)
-  (remove-hook 'window-size-change-functions
-               #'pretty-tables--window-size-changed t)
   (pretty-tables--delete-overlays (point-min) (point-max))
   (setq pretty-tables--window-columns nil
         pretty-tables--revealed nil
@@ -1112,13 +1122,15 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (font-lock-flush))
 
 (defun pretty-tables-unload-function ()
-  "Remove the variable watchers and the theme hooks the file added.
+  "Remove the variable watchers and the hooks the file added.
 The watchers are those of `pretty-tables--options'.  Called by
 `unload-feature'; nil means unloading continues."
   (dolist (option pretty-tables--options)
     (remove-variable-watcher option #'pretty-tables--option-changed))
   (remove-hook 'enable-theme-functions #'pretty-tables--theme-changed)
   (remove-hook 'disable-theme-functions #'pretty-tables--theme-changed)
+  (remove-hook 'window-size-change-functions #'pretty-tables--windows-changed)
+  (remove-hook 'window-buffer-change-functions #'pretty-tables--windows-changed)
   nil)
 
 (provide 'pretty-tables)
