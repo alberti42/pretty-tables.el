@@ -118,6 +118,7 @@ The options below and the faces belong to *pretty-tables*, so they apply to both
 |Option                          |Default|Meaning                                                                      |
 |--------------------------------|-------|-----------------------------------------------------------------------------|
 |`pretty-tables-width`           |`nil`  |Maximum width, in columns, of a displayed table. When nil, use `fill-column`.|
+|`pretty-tables-max-width`       |`nil`  |Most width, in columns, of a table when `pretty-tables-width` is `window`. When nil, the table may be as wide as the window.|
 |`pretty-tables-min-column-width`|`8`    |Width below which a column is not narrowed to fit the table width.           |
 |`pretty-tables-stripe-rows`     |`t`    |Non-nil means data rows are drawn with alternating backgrounds.              |
 |`pretty-tables-row-lines`       |`nil`  |Non-nil means a line is drawn under each data row but the last.              |
@@ -126,6 +127,10 @@ The options below and the faces belong to *pretty-tables*, so they apply to both
 |`pretty-tables-image-spacing`   |`0.5`  |Most space above and below an image in a cell of a drawn table, in units of the height of a line of text, split evenly above and below the image.|
 |`pretty-tables-image-spacing-factor`|`2`|Pixels of space per pixel an image reaches past the letters of the line. 0 means no space for any image; t means the most space for every image that reaches past the font, and none for one that fits within it; nil means the most space for every image.|
 |`pretty-tables-reveal`          |`writable`|When the row point is on is shown as its raw text: `always`, `writable` (in a buffer that is not read-only) or `nil` (never). During an Isearch it is shown whatever the value.|
+
+*pretty-tables-width* also takes the value `window`: a table then fits the narrowest window showing the buffer, less the table's indentation and `line-prefix`, at most *pretty-tables-max-width*, and is drawn again when the windows showing the buffer change. In a buffer no window shows, the width is *fill-column*.
+
+Each width option bounds how far the columns are narrowed, and none of them widens a table. No column is narrowed below its floor: its Org width cookie, else *pretty-tables-min-column-width*, and never below its widest image. A table whose columns are all at their floors can be wider than the width.
 
 Setting *fill-column* (`C-x f`) or one of these options draws the tables again in the buffers where a mode is on.
 
