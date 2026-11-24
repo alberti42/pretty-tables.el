@@ -714,17 +714,13 @@ returned whole."
 
 (defun pretty-tables--pad (text width alignment)
   "Pad TEXT with spaces to WIDTH, placing it according to ALIGNMENT.
-In pixels, when `pretty-tables--unit' is non-nil, each space is a
-stretch of `pretty-tables--space'."
-  (let* ((gap (max 0 (- width (pretty-tables--width text))))
+In columns; in pixels a row is built by `pretty-tables--pixel-line'."
+  (let* ((gap (max 0 (- width (string-width text))))
          (left (pcase alignment
                  ('right gap)
                  ('center (/ gap 2))
-                 (_ 0)))
-         (space (if pretty-tables--unit
-                    (lambda (n) (if (> n 0) (pretty-tables--space n) ""))
-                  (lambda (n) (make-string n ?\s)))))
-    (concat (funcall space left) text (funcall space (- gap left)))))
+                 (_ 0))))
+    (concat (make-string left ?\s) text (make-string (- gap left) ?\s))))
 
 (defun pretty-tables--border (edge &optional rule)
   "Return the string drawing a vertical line of a table.
@@ -747,10 +743,7 @@ which is the bottom pixel row of the screen line: the horizontal line
 of the separator row.  On a text terminal the string is `│', or
 with RULE `├', `┼' or `┤'."
   (cond
-   ((not (eq pretty-tables-borders 'lines))
-    (if pretty-tables--line
-        (pretty-tables--center "|" pretty-tables--line)
-      "|"))
+   ((not (eq pretty-tables-borders 'lines)) "|")
    ((display-graphic-p)
     (let ((line (propertize " " 'display '(space :width (1))
                             'face (list :inherit 'pretty-tables-border
@@ -858,20 +851,77 @@ returned as it is."
                       (setq pos (+ pos c 3))))
                   widths counts)))))))
 
+(defun pretty-tables--pixel-line (texts widths alignments)
+  "Return one screen line of a row laid out in pixels.
+TEXTS has the text of each cell on that line, WIDTHS and ALIGNMENTS
+the width in pixels and the alignment of each column.  The pieces are
+those of `pretty-tables--draw-row' in columns: a vertical line, the
+space of `pretty-tables--unit' pixels on each side of a cell, the
+cell's text padded to its width.  All the space between two pieces of
+text or two vertical lines is one stretch, of the sum of its pixels:
+the display engine handles each stretch on its own, and redisplay of a
+window showing a table took about 10 microseconds per stretch.  A
+vertical line is the 1-pixel stretch of `pretty-tables--border', in a
+column of `pretty-tables--unit' pixels, with `pretty-tables-borders'
+`lines', and `|' centred in `pretty-tables--line' pixels with
+`ascii'."
+  (let* ((unit pretty-tables--unit)
+         (lines (eq pretty-tables-borders 'lines))
+         (bar (unless lines (pretty-tables--pixel-width "|")))
+         (column (unless lines (or pretty-tables--line bar)))
+         (gap 0)
+         (parts nil)
+         (space (lambda (pixels) (setq gap (+ gap (max 0 pixels)))))
+         (emit (lambda (string)
+                 (when (> gap 0)
+                   (push (pretty-tables--space gap) parts)
+                   (setq gap 0))
+                 (push string parts)))
+         (vertical
+          (lambda (edge)
+            (if lines
+                ;; At the edges the line is on the outer side of its
+                ;; column, so the background of a row ends at the line.
+                (let ((left (pcase edge
+                              ('left 0)
+                              ('right (1- unit))
+                              (_ (/ unit 2)))))
+                  (funcall space left)
+                  (funcall emit (propertize
+                                 " " 'display (list 'space :width (list 1))
+                                 'face (list :inherit 'pretty-tables-border
+                                             :inverse-video t)))
+                  (funcall space (- unit 1 left)))
+              (let ((left (/ (- column bar) 2)))
+                (funcall space left)
+                (funcall emit "|")
+                (funcall space (- column bar left)))))))
+    (funcall vertical 'left)
+    (let ((n (length widths)))
+      (dotimes (i n)
+        (let* ((text (or (nth i texts) ""))
+               (pad (max 0 (- (nth i widths) (pretty-tables--width text))))
+               (left (pcase (nth i alignments)
+                       ('right pad)
+                       ('center (/ pad 2))
+                       (_ 0))))
+          (funcall space (+ unit left))
+          (unless (string-empty-p text)
+            (funcall emit text))
+          (funcall space (+ (- pad left) unit))
+          (funcall vertical (if (= i (1- n)) 'right nil)))))
+    (when (> gap 0)
+      (push (pretty-tables--space gap) parts))
+    (apply #'concat (nreverse parts))))
+
 (defun pretty-tables--draw-row (cells widths alignments)
   "Return the string drawing a row whose cells are CELLS.
 CELLS is a list of cells, each a list of paragraphs.  WIDTHS and
-ALIGNMENTS give each column's width and alignment.  The lines between
-the cells are those of `pretty-tables--border'.  Each cell has a space
-on each side, in pixels a stretch of `pretty-tables--unit' pixels."
-  (let* ((gutter (lambda ()
-                   (if pretty-tables--unit
-                       ;; A new stretch each time: Emacs shows adjacent
-                       ;; characters whose `display' is the same object
-                       ;; as one stretch.
-                       (pretty-tables--space pretty-tables--unit)
-                     " ")))
-         (wrapped (seq-map-indexed
+ALIGNMENTS give each column's width and alignment.  In pixels each
+screen line is built by `pretty-tables--pixel-line'.  In columns the
+lines between the cells are those of `pretty-tables--border', and each
+cell has a space on each side."
+  (let* ((wrapped (seq-map-indexed
                    (lambda (width i)
                      (mapcan (lambda (p) (pretty-tables--wrap p width))
                              (nth i cells)))
@@ -879,17 +929,21 @@ on each side, in pixels a stretch of `pretty-tables--unit' pixels."
          (height (apply #'max 1 (mapcar #'length wrapped)))
          lines)
     (dotimes (k height)
-      (push (concat (pretty-tables--border 'left)
-                    (mapconcat
-                     (lambda (i)
-                       (concat (funcall gutter)
-                               (pretty-tables--pad
-                                (or (nth k (nth i wrapped)) "")
-                                (nth i widths) (nth i alignments))
-                               (funcall gutter)))
-                     (number-sequence 0 (1- (length widths)))
-                     (pretty-tables--border nil))
-                    (pretty-tables--border 'right))
+      (push (if pretty-tables--unit
+                (pretty-tables--pixel-line
+                 (mapcar (lambda (column) (nth k column)) wrapped)
+                 widths alignments)
+              (concat (pretty-tables--border 'left)
+                      (mapconcat
+                       (lambda (i)
+                         (concat " "
+                                 (pretty-tables--pad
+                                  (or (nth k (nth i wrapped)) "")
+                                  (nth i widths) (nth i alignments))
+                                 " "))
+                       (number-sequence 0 (1- (length widths)))
+                       (pretty-tables--border nil))
+                      (pretty-tables--border 'right)))
             lines))
     (mapconcat #'identity (nreverse lines) "\n")))
 

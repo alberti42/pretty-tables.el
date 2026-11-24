@@ -22,6 +22,7 @@ to `X.Y.Z`.
 - An image in a cell is measured as it is displayed and takes its own width, no longer rounded up to whole columns; its spec needs no `:width`.
 - Drawing a table allocates less: the buffer position of each character of a cell, which a click reads, is kept by run of characters, not on each character. A table of 55 rows, byte-compiled, is drawn in 16 ms in pixels and 3.7 ms in columns, against 58 ms and 32 ms.
 - Typing in the row point is on no longer draws its table again at each change: the other rows keep their drawing until point leaves the row, and the table is then drawn with the widths of the new text. An edit that adds or deletes a newline, or changes another row, draws the table at once. While you type in the row, the adaptor is not asked for the tables either.
+- A drawn row holds fewer stretches: all the space between two pieces of text or two vertical lines is one stretch. A full redisplay of a window showing a table of 55 rows with `lines` borders took 16.7 ms and takes 11.6–13.3 ms; with the mode off it takes 9–10 ms.
 - A `space` display with a `:width` in a cell, such as one that hides link markup, keeps its width in a table laid out in pixels, where it was N spaces of the table's font.
 - The tables are drawn again after a command that changes the buffer's face remapping, such as `text-scale-adjust` or `buffer-face-mode`, and after the frame's font is set: a table laid out in pixels is measured in those fonts.
 

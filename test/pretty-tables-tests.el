@@ -1221,11 +1221,12 @@ again replaces it."
 
 (ert-deftest pretty-tables-test-borders-lines-graphic ()
   "On a graphical display, `lines' draws 1-pixel lines.
-Each vertical line is one column with a 1-pixel stretch in reverse
-video: in the middle between two columns, on the outer side at the
-left and right edges.  A separator row at the top of the table is a stretch per column with a
-underline at the descent line, and the other stretches of its vertical lines have
-one too."
+Each vertical line is a 1-pixel stretch in reverse video in a column
+of 10 pixels: in the middle between two columns, on the outer side at
+the left and right edges.  In a data row, all the space between two
+lines or pieces of text is one stretch.  A separator row at the top
+of the table is a stretch per column with an underline at the descent
+line, and the other stretches of its vertical lines have one too."
   (let ((pretty-tables-borders 'lines)
         (pretty-tables-stripe-rows nil))
     (pretty-tables-tests--with-pixels
@@ -1242,15 +1243,18 @@ one too."
                                     face)))
                     (list (list line edge) (list half line rest)
                           (list edge line)))))
-               (data (funcall displays nil))
                (rule (funcall displays
                               '(:inherit pretty-tables-border :underline (:position t))))
                (data-row (pretty-tables-tests--displays (nth 2 rows))))
-          (should (equal (substring-no-properties (nth 2 rows))
-                         "   r0     x   "))
-          (should (equal (seq-take data-row 2) (nth 0 data)))
-          (should (equal (seq-subseq data-row 6 9) (nth 1 data)))
-          (should (equal (last data-row 2) (nth 2 data)))
+          (should (equal (substring-no-properties (nth 2 rows)) "  r0   x  "))
+          ;; Columns of 20 and 10 pixels, with 10 on each side.
+          (should (equal data-row
+                         (list line '((space :width (19)) nil)
+                               '(nil nil) '(nil nil)
+                               '((space :width (15)) nil) line
+                               '((space :width (14)) nil)
+                               '(nil nil)
+                               '((space :width (19)) nil) line)))
           (should (equal (pretty-tables-tests--displays (nth 0 rows))
                          (append (nth 0 rule)
                                  ;; The columns are 20 and 10 pixels
@@ -1267,19 +1271,20 @@ one too."
 (ert-deftest pretty-tables-test-pixel-rows ()
   "In pixels, every row of a table is as wide as the others.
 An `i' is 4 pixels wide, so `iiii' is narrower than `ab', and its cell
-is padded with a stretch of the pixels left; the space on each side
-of a cell is a stretch of one column."
+is padded with the pixels left.  The padding and the space of one
+column on each side of a cell are one stretch."
   (pretty-tables-tests--with-pixels
     (pretty-tables-tests--with-buffer "Title\n\n| iiii | b |\n| ab | c |\n"
       (let ((rows (pretty-tables-tests--row-strings)))
         (should (equal (mapcar #'pretty-tables-tests--pixel-width rows)
                        ;; 10 per `|', 20 per cell's sides, 20 and 10 of text.
                        '(100 100)))
-        (should (equal (substring-no-properties (car rows)) "| iiii  | b |"))
+        (should (equal (substring-no-properties (car rows)) "| iiii | b |"))
         (should (equal (get-text-property 1 'display (car rows))
                        '(space :width (10))))
+        ;; 4 pixels of padding and 10 of space.
         (should (equal (get-text-property 6 'display (car rows))
-                       '(space :width (4))))))))
+                       '(space :width (14))))))))
 
 (defun pretty-tables-tests--as-columns (string)
   "Return STRING with each `space' display read as spaces of 10 pixels."
@@ -1360,8 +1365,16 @@ vertical lines are where those of the other rows are."
             (pretty-tables--adaptor (list :separator separator)))
         (should (= (pretty-tables--line-width 2 '(left left)) 8))
         (let ((pretty-tables--line 8))
-          (should (equal (pretty-tables-tests--displays (pretty-tables--border nil))
-                         '(((space :width (2)) nil) (nil nil) ((space :width (2)) nil))))
+          ;; `|' is 4 pixels wide, with 2 on each side.
+          (let ((line (pretty-tables--pixel-line '("ab" "cd") '(20 20)
+                                                 '(left left))))
+            (should (equal (substring-no-properties line) " | ab | cd | "))
+            (should (equal (mapcar #'car (pretty-tables-tests--displays line))
+                           '((space :width (2)) nil (space :width (12)) nil nil
+                             (space :width (12)) nil (space :width (12)) nil nil
+                             (space :width (12)) nil (space :width (2)))))
+            (should (= (pretty-tables-tests--pixel-width line)
+                       (+ (* 3 8) (* 2 40)))))
           ;; Two columns of 20 pixels and 10 on each side take four `-'
           ;; each; `+' is 8 pixels wide already.
           (let ((rule (pretty-tables--separator '(20 20) '(left left))))
