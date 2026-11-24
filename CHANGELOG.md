@@ -16,6 +16,10 @@ to `X.Y.Z`.
 
 - The value `window` of `pretty-tables-width`: a table fits the narrowest window showing the buffer, less the table's indentation and `line-prefix`, and is drawn again when that width changes, for example when a window is resized or split or shows another buffer. The option `pretty-tables-max-width` (default nil, no bound) bounds the width from above. As with the other widths, no column is narrowed below its floor (its width cookie, `pretty-tables-min-column-width` or its widest image), so a table at its floors can be wider than the window or the maximum. In a buffer no window shows, the width is `fill-column`. The default of `pretty-tables-width` stays nil, `fill-column`.
 
+### Changed
+
+- On a graphical display, tables are laid out in pixels: each cell is measured in the faces it is drawn with, so a character the table's font lacks, such as `★`, drawn in a wider fallback font, and a variable-pitch font no longer put the columns out of line. `pretty-tables-width` and `pretty-tables-min-column-width` are still in columns, a column being the width of the font of the table face (`markdown-ts-table`, `org-table`); with a fixed-pitch font, a table is drawn as before. With `ascii` borders, the `-` of a separator row can end up to one `-` short of the next `|` or `+`. On a text terminal, tables are laid out in columns.
+
 ## [0.6.0] - 2026-11-08
 
 ### Added

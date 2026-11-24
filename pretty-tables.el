@@ -37,7 +37,11 @@
 ;; the row with aligned columns, and whose `display' of "" hides the
 ;; row's text.  Column widths come from
 ;; the text a reader sees in each cell: characters that are invisible
-;; (for example hidden link markup) take no room.  When the table is
+;; (for example hidden link markup) take no room.  On a graphical
+;; display the cells are measured in pixels, in the faces they are
+;; drawn with, so a variable-pitch font, or a character drawn in a
+;; fallback font, keeps the columns aligned; on a text terminal they
+;; are counted in columns.  When the table is
 ;; wider than `pretty-tables-width', the widest columns are narrowed and
 ;; their cells are word-wrapped onto several screen lines.  Data rows
 ;; are drawn with alternating backgrounds (`pretty-tables-stripe-rows'),
@@ -73,7 +77,9 @@
 When nil, use `fill-column'.  When `window', use the width of the
 narrowest window showing the buffer, at most `pretty-tables-max-width',
 and draw the tables again when that width changes; in a buffer no
-window shows, use `fill-column'.
+window shows, use `fill-column'.  On a graphical display a column is
+the width of the font of the adaptor's table face, such as
+`org-table'.
 The width bounds how far columns are narrowed; no column is narrowed
 below its floor (see `pretty-tables--column-widths'), so a table whose
 columns are at their floors can be wider than this width, and a table
@@ -236,12 +242,92 @@ A plist; non-nil means the tables of the buffer are drawn.")
 Stops the nested `jit-lock-fontify-now' from running the drawing
 function again.")
 
+(defvar pretty-tables--unit nil
+  "Width in pixels of a column while tables are laid out in pixels, or nil.
+`pretty-tables--fontify' binds it on a graphical display; see
+`pretty-tables--column-pixels'.  Nil means the tables are laid out in
+columns, with `string-width'.")
+
+(defvar pretty-tables--line nil
+  "Width in pixels of a vertical line `|' while a table is drawn, or nil.
+Bound while a table is laid out in pixels with `pretty-tables-borders'
+`ascii': the widest of `|' and the characters the adaptor's
+`:separator' puts where its vertical lines cross the separator row.
+Each of them is centred in that width.  See
+`pretty-tables--line-width'.")
+
+(defvar pretty-tables--widths nil
+  "Hash table of the strings `pretty-tables--width' measured, or nil.
+Its keys are the strings themselves, compared with `eq': the cell of a
+row is measured for the width of its column, for wrapping and for
+padding.  Bound to a new table while tables are drawn.")
+
 (defvar-keymap pretty-tables-row-map
   :doc "Keymap on the strings that draw table rows."
   "<down-mouse-1>" #'ignore
   "<mouse-1>" #'pretty-tables-mouse-follow
   "<down-mouse-2>" #'ignore
   "<mouse-2>" #'pretty-tables-mouse-follow)
+
+;;; Measuring
+
+(defun pretty-tables--pixel-width (string)
+  "Return the width in pixels of STRING as a drawn row shows it.
+The adaptor's `:face' is appended to a copy of STRING, as it is to a
+drawn row, and the copy is measured with `string-pixel-width' in the
+current buffer, so the buffer's face remapping applies."
+  (let ((face (plist-get pretty-tables--adaptor :face)))
+    (when face
+      (setq string (copy-sequence string))
+      (add-face-text-property 0 (length string) face t string))
+    (string-pixel-width string (current-buffer))))
+
+(defun pretty-tables--width (string)
+  "Return the width of STRING in the unit of the layout.
+In pixels, with `pretty-tables--pixel-width', when
+`pretty-tables--unit' is non-nil; else in columns, with
+`string-width'.  A string is measured in pixels once while it is in
+`pretty-tables--widths': a string must not be changed after it is
+measured."
+  (cond
+   ((not pretty-tables--unit) (string-width string))
+   ((not pretty-tables--widths) (pretty-tables--pixel-width string))
+   (t (or (gethash string pretty-tables--widths)
+          (puthash string (pretty-tables--pixel-width string)
+                   pretty-tables--widths)))))
+
+(defun pretty-tables--column-pixels ()
+  "Return the width in pixels of a column of a drawn table.
+It is the `width' unit of a stretch in the adaptor's `:face': the
+width of the face's font, which the vertical lines of
+`pretty-tables--border' are drawn in.  At least 1."
+  (max 1 (pretty-tables--pixel-width
+          (propertize " " 'display '(space :width (1 . width))))))
+
+(defun pretty-tables--space (pixels)
+  "Return a string showing a space PIXELS wide.
+Its `display' is a new list each time: Emacs shows adjacent characters
+whose `display' is the same object as one space."
+  (propertize " " 'display `(space :width (,pixels))))
+
+(defun pretty-tables--fill (string width)
+  "Return STRING followed by the space that makes it WIDTH pixels wide.
+STRING itself when it is WIDTH pixels wide or wider."
+  (let ((gap (- width (pretty-tables--pixel-width string))))
+    (if (> gap 0)
+        (concat string (pretty-tables--space gap))
+      string)))
+
+(defun pretty-tables--center (string width)
+  "Return STRING between the spaces that make it WIDTH pixels wide.
+STRING itself when it is WIDTH pixels wide or wider."
+  (let* ((gap (- width (pretty-tables--pixel-width string)))
+         (left (/ (max gap 0) 2)))
+    (if (> gap 0)
+        (concat (if (> left 0) (pretty-tables--space left) "")
+                string
+                (pretty-tables--space (- gap left)))
+      string)))
 
 ;;; Reading the buffer
 
@@ -417,8 +503,9 @@ adaptor has none."
 
 ;;; Layout
 
-(defun pretty-tables--narrow-widest (widths floors)
-  "Narrow by one the widest of WIDTHS that is wider than its floor.
+(defun pretty-tables--narrow-widest (widths floors &optional step)
+  "Narrow by STEP the widest of WIDTHS that is wider than its floor.
+STEP is 1 when nil.  A column is not narrowed below its floor.
 FLOORS has an entry per column, a width or nil; a column whose entry
 is nil is not narrowed.  WIDTHS is changed in place.  Return nil when
 no column is wider than its floor."
@@ -430,7 +517,8 @@ no column is wider than its floor."
                         (setq best i)))
                     floors)
     (when best
-      (setf (nth best widths) (1- (nth best widths))))))
+      (setf (nth best widths) (max (nth best floors)
+                                   (- (nth best widths) (or step 1)))))))
 
 (defun pretty-tables--window-width ()
   "Return the columns of the narrowest window showing the buffer, or nil."
@@ -457,18 +545,25 @@ window columns before the table.  See `pretty-tables-width'."
        fill-column))
     (width width)))
 
-(defun pretty-tables--column-widths (natural target &optional minimums images)
-  "Narrow the NATURAL column widths until the table fits TARGET columns.
-A table with N columns of widths W takes sum(W) + 3N + 1 columns.
+(defun pretty-tables--column-widths (natural target &optional minimums images
+                                             overhead)
+  "Narrow the NATURAL column widths until the table fits TARGET.
+A table whose columns have widths W takes sum(W) + OVERHEAD, the
+width of its vertical lines and of the space on each side of each
+cell.  OVERHEAD is 3N + 1 when nil, N being the number of columns.
 MINIMUMS has an entry per column, a width or nil.  First the widest
-column with an entry is narrowed by one, until the table fits or each
-such column is at its entry.  Then the widest column is narrowed by
-one until the table fits or every column is at its entry or, without
-one, at `pretty-tables-min-column-width'.  IMAGES has an entry per
-column, the width of its widest image or nil, and no column is
-narrowed below it."
+column with an entry is narrowed by one column, until the table fits
+or each such column is at its entry.  Then the widest column is
+narrowed by one column until the table fits or every column is at its
+entry or, without one, at `pretty-tables-min-column-width' columns.
+IMAGES has an entry per column, the width of its widest image or nil,
+and no column is narrowed below it.  The widths are in columns, or in
+pixels when `pretty-tables--unit' is non-nil, a column being that many
+pixels."
   (let* ((widths (copy-sequence natural))
          (n (length widths))
+         (unit (or pretty-tables--unit 1))
+         (overhead (or overhead (+ (* 3 n) 1)))
          (images (mapcar (lambda (i) (or (nth i images) 0))
                          (number-sequence 0 (1- n))))
          (minimums (seq-mapn (lambda (m image) (and m (max m image)))
@@ -476,20 +571,36 @@ narrowed below it."
                                      (number-sequence 0 (1- n)))
                              images))
          (floors (seq-mapn (lambda (m image)
-                             (or m (max pretty-tables-min-column-width image)))
+                             (or m (max (* pretty-tables-min-column-width unit)
+                                        image)))
                            minimums images)))
     (dolist (floors (list minimums floors))
-      (while (and (> (+ (apply #'+ widths) (* 3 n) 1) target)
-                  (pretty-tables--narrow-widest widths floors))))
+      (while (and (> (+ (apply #'+ widths) overhead) target)
+                  (pretty-tables--narrow-widest widths floors unit))))
     widths))
+
+(defun pretty-tables--fit (string width)
+  "Return the length of the longest start of STRING no wider than WIDTH.
+The width is that of `pretty-tables--width'."
+  (if pretty-tables--unit
+      (let ((low 0) (high (length string)))
+        ;; The longest start that fits is LOW characters or longer, and
+        ;; HIGH characters or shorter.
+        (while (< low high)
+          (let ((middle (/ (+ low high 1) 2)))
+            (if (<= (pretty-tables--width (substring string 0 middle)) width)
+                (setq low middle)
+              (setq high (1- middle)))))
+        low)
+    (length (truncate-string-to-width string width))))
 
 (defun pretty-tables--break-word (word width)
   "Split WORD into pieces no wider than WIDTH.
 An image (see `pretty-tables--image-string') is not split: a piece
 ends before it, or, when it starts the piece, after it."
   (let (pieces)
-    (while (> (string-width word) width)
-      (let* ((cut (length (truncate-string-to-width word width)))
+    (while (> (pretty-tables--width word) width)
+      (let* ((cut (pretty-tables--fit word width))
              (image (and (< 0 cut (length word))
                          (get-text-property cut 'pretty-tables-image word))))
         (when (and image
@@ -509,51 +620,84 @@ ends before it, or, when it starts the piece, after it."
 
 (defun pretty-tables--widest-image (paragraph)
   "Return the width of the widest image in PARAGRAPH, or 0.
-The images are those of `pretty-tables--image-string'."
+The images are those of `pretty-tables--image-string'.  In columns
+the width is the number in their `pretty-tables-image'; in pixels,
+when `pretty-tables--unit' is non-nil, it is measured."
   (let ((pos 0) (widest 0))
     (while (setq pos (text-property-not-all pos (length paragraph)
                                             'pretty-tables-image nil
                                             paragraph))
-      (setq widest (max widest (car (get-text-property
-                                     pos 'pretty-tables-image paragraph)))
-            pos (next-single-property-change pos 'pretty-tables-image
-                                             paragraph (length paragraph))))
+      (let ((end (next-single-property-change pos 'pretty-tables-image
+                                              paragraph (length paragraph))))
+        (setq widest (max widest
+                          (if pretty-tables--unit
+                              (pretty-tables--width (substring paragraph pos end))
+                            (car (get-text-property
+                                  pos 'pretty-tables-image paragraph))))
+              pos end)))
     widest))
 
 (defun pretty-tables--wrap (paragraph width)
   "Word-wrap PARAGRAPH into lines no wider than WIDTH.
-Lines are substrings of PARAGRAPH, so they keep its text properties."
-  (let ((pos 0) (line-beg nil) (line-end nil) lines)
-    (while (string-match "[^ \t]+" paragraph pos)
-      (let ((wbeg (match-beginning 0))
-            (wend (match-end 0)))
-        (cond
-         ((and line-beg
-               (<= (string-width (substring paragraph line-beg wend)) width))
-          (setq line-end wend))
-         (t
-          (when line-beg
-            (push (substring paragraph line-beg line-end) lines))
-          (let ((word (substring paragraph wbeg wend)))
-            (if (<= (string-width word) width)
-                (setq line-beg wbeg line-end wend)
-              (let ((pieces (pretty-tables--break-word word width)))
-                (setq lines (append (reverse (butlast pieces)) lines))
-                (setq line-end wend
-                      line-beg (- wend (length (car (last pieces)))))))))))
-      (setq pos (match-end 0)))
-    (when line-beg
-      (push (substring paragraph line-beg line-end) lines))
-    (or (nreverse lines) (list ""))))
+Lines are substrings of PARAGRAPH, so they keep its text properties.
+The width is that of `pretty-tables--width'.  Each line holds as many
+words as fit; a longer start of a paragraph is never narrower, so the
+last word that fits is found by a binary search over the ends of the
+words, which measures about log2 of their number lines.  A word wider
+than WIDTH is split by `pretty-tables--break-word', and its last piece
+starts the next line.  In pixels, a PARAGRAPH no wider than WIDTH is
+returned whole."
+  (if (and pretty-tables--unit
+           (<= (pretty-tables--width paragraph) width))
+      (list paragraph)
+    (let ((pos 0) (words nil) (i 0) (line-beg nil) lines)
+      (while (string-match "[^ \t]+" paragraph pos)
+        (push (cons (match-beginning 0) (match-end 0)) words)
+        (setq pos (match-end 0)))
+      (setq words (vconcat (nreverse words)))
+      (while (< i (length words))
+        (unless line-beg
+          (setq line-beg (car (aref words i))))
+        (let ((fits (lambda (j)
+                      (<= (pretty-tables--width
+                           (substring paragraph line-beg (cdr (aref words j))))
+                          width))))
+          (if (funcall fits i)
+              (let ((low i) (high (1- (length words))))
+                ;; The last word that fits is LOW or after, HIGH or before.
+                (while (< low high)
+                  (let ((middle (/ (+ low high 1) 2)))
+                    (if (funcall fits middle)
+                        (setq low middle)
+                      (setq high (1- middle)))))
+                (push (substring paragraph line-beg (cdr (aref words low)))
+                      lines)
+                (setq i (1+ low)
+                      line-beg nil))
+            (let* ((end (cdr (aref words i)))
+                   (pieces (pretty-tables--break-word
+                            (substring paragraph line-beg end) width))
+                   (last (car (last pieces))))
+              (setq lines (append (reverse (butlast pieces)) lines))
+              (if (string-empty-p last)
+                  (setq i (1+ i)
+                        line-beg nil)
+                (setq line-beg (- end (length last))))))))
+      (or (nreverse lines) (list "")))))
 
 (defun pretty-tables--pad (text width alignment)
-  "Pad TEXT with spaces to WIDTH, placing it according to ALIGNMENT."
-  (let* ((gap (max 0 (- width (string-width text))))
+  "Pad TEXT with spaces to WIDTH, placing it according to ALIGNMENT.
+In pixels, when `pretty-tables--unit' is non-nil, each space is a
+stretch of `pretty-tables--space'."
+  (let* ((gap (max 0 (- width (pretty-tables--width text))))
          (left (pcase alignment
                  ('right gap)
                  ('center (/ gap 2))
-                 (_ 0))))
-    (concat (make-string left ?\s) text (make-string (- gap left) ?\s))))
+                 (_ 0)))
+         (space (if pretty-tables--unit
+                    (lambda (n) (if (> n 0) (pretty-tables--space n) ""))
+                  (lambda (n) (make-string n ?\s)))))
+    (concat (funcall space left) text (funcall space (- gap left)))))
 
 (defun pretty-tables--border (edge &optional rule)
   "Return the string drawing a vertical line of a table.
@@ -576,7 +720,10 @@ which is the bottom pixel row of the screen line: the horizontal line
 of the separator row.  On a text terminal the string is `│', or
 with RULE `├', `┼' or `┤'."
   (cond
-   ((not (eq pretty-tables-borders 'lines)) "|")
+   ((not (eq pretty-tables-borders 'lines))
+    (if pretty-tables--line
+        (pretty-tables--center "|" pretty-tables--line)
+      "|"))
    ((display-graphic-p)
     (let ((line (propertize " " 'display '(space :width (1))
                             'face (list :inherit 'pretty-tables-border
@@ -613,7 +760,10 @@ of `pretty-tables--border'.  Used when `pretty-tables-borders' is
             (mapconcat
              (lambda (w)
                (if graphic
-                   (propertize " " 'display `(space :width (,(+ 2 w) . width))
+                   (propertize " " 'display
+                               (if pretty-tables--unit
+                                   `(space :width (,(+ w (* 2 pretty-tables--unit))))
+                                 `(space :width (,(+ 2 w) . width)))
                                'face (list :inherit 'pretty-tables-border
                                            :underline '(:position t)))
                  (propertize (make-string (+ 2 w) ?─)
@@ -621,12 +771,80 @@ of `pretty-tables--border'.  Used when `pretty-tables-borders' is
              widths (pretty-tables--border nil t))
             (pretty-tables--border 'right t))))
 
+(defun pretty-tables--line-width (ncols alignments)
+  "Return the width in pixels of the vertical lines of a table, or nil.
+NCOLS is the number of columns of the table, ALIGNMENTS their
+alignments.  The width is that of the widest of `|' and the
+characters the adaptor's `:separator' puts where the vertical lines
+cross the separator row, called with columns 0 characters wide.  Nil
+unless the table is laid out in pixels with `pretty-tables-borders'
+`ascii'."
+  (when (and pretty-tables--unit (not (eq pretty-tables-borders 'lines)))
+    (let ((string (funcall (plist-get pretty-tables--adaptor :separator)
+                           (make-list ncols 0) alignments)))
+      (apply #'max (pretty-tables--pixel-width "|")
+             (and (= (length string) (1+ (* 3 ncols)))
+                  (mapcar (lambda (i)
+                            (pretty-tables--pixel-width
+                             (substring string (* 3 i) (1+ (* 3 i)))))
+                          (number-sequence 0 ncols)))))))
+
+(defun pretty-tables--separator (widths alignments)
+  "Return the adaptor's separator row for the column WIDTHS and ALIGNMENTS.
+In columns, it is the string the adaptor's `:separator' returns.  In
+pixels, when `pretty-tables--unit' is non-nil, `:separator' is called
+with, for each column, the number of characters `-' that fit in the
+column and the space on each side of it, minus 2, as it would draw a
+column that many characters wide.  Its string has one character at
+each vertical line and that many plus 2 for each column.  Each
+character at a vertical line is centred in `pretty-tables--line'
+pixels, with `pretty-tables--center', and the characters of each
+column are filled to its width and the spaces on each side, with
+`pretty-tables--fill', so they can end short of the next vertical line
+by less than the width of one `-'.  A string of another length is
+returned as it is."
+  (let ((separator (plist-get pretty-tables--adaptor :separator)))
+    (if (not pretty-tables--unit)
+        (funcall separator widths alignments)
+      (let* ((space (* 2 pretty-tables--unit))
+             (dash (max 1 (pretty-tables--pixel-width "-")))
+             (counts (mapcar (lambda (w) (max 0 (- (floor (+ w space) dash) 2)))
+                             widths))
+             (string (funcall separator counts alignments))
+             (line (lambda (pos)
+                     (let ((char (substring string pos (1+ pos))))
+                       (if pretty-tables--line
+                           (pretty-tables--center char pretty-tables--line)
+                         char))))
+             (pos 1))
+        (if (/= (length string)
+                (+ 1 (apply #'+ (mapcar (lambda (c) (+ c 3)) counts))))
+            string
+          (apply #'concat
+                 (funcall line 0)
+                 (seq-mapn
+                  (lambda (w c)
+                    (prog1 (concat (pretty-tables--fill
+                                    (substring string pos (+ pos c 2))
+                                    (+ w space))
+                                   (funcall line (+ pos c 2)))
+                      (setq pos (+ pos c 3))))
+                  widths counts)))))))
+
 (defun pretty-tables--draw-row (cells widths alignments)
   "Return the string drawing a row whose cells are CELLS.
 CELLS is a list of cells, each a list of paragraphs.  WIDTHS and
 ALIGNMENTS give each column's width and alignment.  The lines between
-the cells are those of `pretty-tables--border'."
-  (let* ((wrapped (seq-map-indexed
+the cells are those of `pretty-tables--border'.  Each cell has a space
+on each side, in pixels a stretch of `pretty-tables--unit' pixels."
+  (let* ((gutter (lambda ()
+                   (if pretty-tables--unit
+                       ;; A new stretch each time: Emacs shows adjacent
+                       ;; characters whose `display' is the same object
+                       ;; as one stretch.
+                       (pretty-tables--space pretty-tables--unit)
+                     " ")))
+         (wrapped (seq-map-indexed
                    (lambda (width i)
                      (mapcan (lambda (p) (pretty-tables--wrap p width))
                              (nth i cells)))
@@ -637,11 +855,11 @@ the cells are those of `pretty-tables--border'."
       (push (concat (pretty-tables--border 'left)
                     (mapconcat
                      (lambda (i)
-                       (concat " "
+                       (concat (funcall gutter)
                                (pretty-tables--pad
                                 (or (nth k (nth i wrapped)) "")
                                 (nth i widths) (nth i alignments))
-                               " "))
+                               (funcall gutter)))
                      (number-sequence 0 (1- (length widths)))
                      (pretty-tables--border nil))
                     (pretty-tables--border 'right))
@@ -776,19 +994,28 @@ the space of `pretty-tables--add-spacing'."
   ;; `get-char-property', which would return their `display' of "".
   (pretty-tables--delete-overlays (plist-get table :beg) (plist-get table :end))
   (let* ((rows (plist-get table :rows))
+         (unit (or pretty-tables--unit 1))
          (data (mapcar (lambda (row)
                          (unless (eq (plist-get row :kind) 'separator)
-                           (mapcar (lambda (cell)
-                                     (pretty-tables--cell-paragraphs
-                                      (car cell) (cdr cell)))
-                                   (plist-get row :cells))))
+                           (let ((cells (mapcar (lambda (cell)
+                                                  (pretty-tables--cell-paragraphs
+                                                   (car cell) (cdr cell)))
+                                                (plist-get row :cells))))
+                             ;; Before the cells are measured: a bold
+                             ;; font can be wider.
+                             (when (eq (plist-get row :kind) 'header)
+                               (dolist (paragraph (apply #'append cells))
+                                 (add-face-text-property
+                                  0 (length paragraph) 'pretty-tables-header t
+                                  paragraph)))
+                             cells)))
                        rows))
          (ncols (apply #'max 1 (mapcar #'length data)))
          (natural (mapcar (lambda (i)
-                            (apply #'max 1
+                            (apply #'max unit
                                    (mapcar (lambda (cells)
                                              (apply #'max 0
-                                                    (mapcar #'string-width
+                                                    (mapcar #'pretty-tables--width
                                                             (nth i cells))))
                                            data)))
                           (number-sequence 0 (1- ncols))))
@@ -806,16 +1033,22 @@ the space of `pretty-tables--add-spacing'."
                                           #'pretty-tables--prefix)
                                       (plist-get row :beg)))
                            rows))
-         (widths (pretty-tables--column-widths
-                  natural (pretty-tables--target-width
-                           (apply #'max 0 (mapcar #'string-width prefixes)))
-                  (plist-get table :min-widths) images))
          (alignments (let ((a (plist-get table :alignments)))
                        (mapcar (lambda (i) (or (nth i a) 'left))
                                (number-sequence 0 (1- ncols)))))
+         (pretty-tables--line (pretty-tables--line-width ncols alignments))
+         (widths (pretty-tables--column-widths
+                  natural (* (pretty-tables--target-width
+                              (apply #'max 0 (mapcar #'string-width prefixes)))
+                             unit)
+                  (mapcar (lambda (m) (and m (* m unit)))
+                          (plist-get table :min-widths))
+                  images
+                  ;; The width of a row whose columns are 0 wide.
+                  (pretty-tables--width
+                   (pretty-tables--draw-row nil (make-list ncols 0) alignments))))
          (ndata (seq-count (lambda (row) (eq (plist-get row :kind) 'data))
                            rows))
-         (separator (plist-get pretty-tables--adaptor :separator))
          (table-face (plist-get pretty-tables--adaptor :face))
          (kinds (mapcar (lambda (row) (plist-get row :kind)) rows))
          (hidden (seq-mapn (lambda (previous kind)
@@ -830,19 +1063,13 @@ the space of `pretty-tables--add-spacing'."
        (let* ((beg (plist-get row :beg))
               (end (plist-get row :end))
               (kind (plist-get row :kind))
-              (string (progn
-                        (when (eq kind 'header)
-                          (dolist (paragraph (apply #'append cells))
-                            (add-face-text-property
-                             0 (length paragraph) 'pretty-tables-header t
-                             paragraph)))
-                        (cond
-                         (hide "")
-                         ((not (eq kind 'separator))
-                          (pretty-tables--draw-row cells widths alignments))
-                         ((eq pretty-tables-borders 'lines)
-                          (pretty-tables--draw-rule widths))
-                         (t (funcall separator widths alignments)))))
+              (string (cond
+                       (hide "")
+                       ((not (eq kind 'separator))
+                        (pretty-tables--draw-row cells widths alignments))
+                       ((eq pretty-tables-borders 'lines)
+                        (pretty-tables--draw-rule widths))
+                       (t (pretty-tables--separator widths alignments))))
               (ov (make-overlay beg
                                 (if (and hide (eql (char-after end) ?\n))
                                     (1+ end)
@@ -892,9 +1119,12 @@ chunk."
   (unless pretty-tables--rendering
     (save-restriction
       (unless font-lock-dont-widen (widen))
-      (let ((pretty-tables--rendering t)
-            (revealed (and pretty-tables--revealed
-                           (overlay-start pretty-tables--revealed))))
+      (let* ((pretty-tables--rendering t)
+             (pretty-tables--unit (and (display-graphic-p)
+                                       (pretty-tables--column-pixels)))
+             (pretty-tables--widths (make-hash-table :test #'eq :weakness 'key))
+             (revealed (and pretty-tables--revealed
+                            (overlay-start pretty-tables--revealed))))
         (pretty-tables--delete-overlays beg end)
         (dolist (table (funcall (plist-get pretty-tables--adaptor :tables)
                                 beg end))

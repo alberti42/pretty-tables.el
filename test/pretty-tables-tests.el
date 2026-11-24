@@ -114,6 +114,57 @@ point is at the start of the buffer."
            ,@body)
        (kill-buffer buf))))
 
+;;; The pixel layout
+
+(defvar pretty-tables-tests--char-pixels '((?i . 4))
+  "Widths in pixels of the characters that are not 10 pixels a column.
+See `pretty-tables-tests--pixel-width'.")
+
+(defun pretty-tables-tests--space-pixels (width)
+  "Return the pixels of WIDTH, the `:width' of a `space' display.
+A column is 10 pixels wide."
+  (pcase width
+    ((pred numberp) (* 10 width))
+    ('width 10)
+    (`(,(and n (pred numberp))) n)
+    (`(,(and n (pred numberp)) . width) (* 10 n))
+    (`(- ,first . ,rest)
+     (apply #'- (pretty-tables-tests--space-pixels first)
+            (mapcar #'pretty-tables-tests--space-pixels rest)))
+    (`(+ . ,rest) (apply #'+ (mapcar #'pretty-tables-tests--space-pixels rest)))))
+
+(defun pretty-tables-tests--pixel-width (string)
+  "Return the width of STRING in pixels, on a display of 10-pixel columns.
+A `space' display is the pixels of `pretty-tables-tests--space-pixels',
+an image its `:width', and a character the pixels in
+`pretty-tables-tests--char-pixels', or 10 per column of its
+`char-width'.  It replaces `pretty-tables--pixel-width' in the tests,
+which cannot measure text in batch mode."
+  (let ((i 0) (width 0))
+    (while (< i (length string))
+      (let ((display (get-text-property i 'display string))
+            (next (next-single-property-change i 'display string (length string))))
+        (pcase display
+          (`(space :width ,w)
+           (setq width (+ width (pretty-tables-tests--space-pixels w))))
+          (`(image . ,props) (setq width (+ width (plist-get props :width))))
+          (_ (dotimes (k (- next i))
+               (let ((char (aref string (+ i k))))
+                 (setq width (+ width (or (alist-get char pretty-tables-tests--char-pixels)
+                                          (* 10 (char-width char)))))))))
+        (setq i next)))
+    width))
+
+(defmacro pretty-tables-tests--with-pixels (&rest body)
+  "Run BODY as on a graphical display whose columns are 10 pixels wide.
+Tables are laid out in pixels, measured with
+`pretty-tables-tests--pixel-width'."
+  (declare (indent 0) (debug t))
+  `(cl-letf (((symbol-function 'display-graphic-p) #'always)
+             ((symbol-function 'pretty-tables--pixel-width)
+              #'pretty-tables-tests--pixel-width))
+     ,@body))
+
 (defun pretty-tables-tests--overlays ()
   "Return the row overlays in the buffer, in buffer order."
   (sort (seq-filter (lambda (ov) (overlay-get ov 'pretty-tables))
@@ -1089,7 +1140,7 @@ underline at the descent line, and the other stretches of its vertical lines hav
 one too."
   (let ((pretty-tables-borders 'lines)
         (pretty-tables-stripe-rows nil))
-    (cl-letf (((symbol-function 'display-graphic-p) #'always))
+    (pretty-tables-tests--with-pixels
       (pretty-tables-tests--with-buffer
           "Title\n\n|---|---|\n| a | b |\n| r0 | x |\n"
         (let* ((rows (pretty-tables-tests--row-strings))
@@ -1114,12 +1165,123 @@ one too."
           (should (equal (last data-row 2) (nth 2 data)))
           (should (equal (pretty-tables-tests--displays (nth 0 rows))
                          (append (nth 0 rule)
-                                 (list (list '(space :width (4 . width))
+                                 ;; The columns are 20 and 10 pixels
+                                 ;; wide, with 10 on each side.
+                                 (list (list '(space :width (40))
                                              (cadr (car (nth 1 rule)))))
                                  (nth 1 rule)
-                                 (list (list '(space :width (3 . width))
+                                 (list (list '(space :width (30))
                                              (cadr (car (nth 1 rule)))))
                                  (nth 2 rule)))))))))
+
+;;; The pixel layout
+
+(ert-deftest pretty-tables-test-pixel-rows ()
+  "In pixels, every row of a table is as wide as the others.
+An `i' is 4 pixels wide, so `iiii' is narrower than `ab', and its cell
+is padded with a stretch of the pixels left; the space on each side
+of a cell is a stretch of one column."
+  (pretty-tables-tests--with-pixels
+    (pretty-tables-tests--with-buffer "Title\n\n| iiii | b |\n| ab | c |\n"
+      (let ((rows (pretty-tables-tests--row-strings)))
+        (should (equal (mapcar #'pretty-tables-tests--pixel-width rows)
+                       ;; 10 per `|', 20 per cell's sides, 20 and 10 of text.
+                       '(100 100)))
+        (should (equal (substring-no-properties (car rows)) "| iiii  | b |"))
+        (should (equal (get-text-property 1 'display (car rows))
+                       '(space :width (10))))
+        (should (equal (get-text-property 6 'display (car rows))
+                       '(space :width (4))))))))
+
+(defun pretty-tables-tests--as-columns (string)
+  "Return STRING with each `space' display read as spaces of 10 pixels."
+  (let ((i 0) (parts nil))
+    (while (< i (length string))
+      (let ((display (get-text-property i 'display string))
+            (next (next-single-property-change i 'display string (length string))))
+        (push (pcase display
+                (`(space :width ,w)
+                 (make-string (/ (pretty-tables-tests--space-pixels w) 10) ?\s))
+                (_ (substring-no-properties string i next)))
+              parts)
+        (setq i next)))
+    (apply #'concat (nreverse parts))))
+
+(ert-deftest pretty-tables-test-pixel-as-columns ()
+  "With every character one column wide, pixels draw what columns draw.
+The table is narrowed and wrapped; each stretch is read as spaces."
+  (let* ((text "Title\n\n| alpha beta gamma | delta epsilon |\n|---|---|\n| one two three four five | six | |\n")
+         (draw (lambda (as-text)
+                 (pretty-tables-tests--with-buffer text
+                   (setq-local pretty-tables-width 30)
+                   (jit-lock-refontify)
+                   (jit-lock-fontify-now)
+                   (mapcar as-text (pretty-tables-tests--row-strings))))))
+    (should (equal (let ((pretty-tables-tests--char-pixels nil))
+                     (pretty-tables-tests--with-pixels
+                       (funcall draw #'pretty-tables-tests--as-columns)))
+                   (funcall draw #'substring-no-properties)))))
+
+(ert-deftest pretty-tables-test-pixel-wrap ()
+  "In pixels, lines are wrapped and words broken at their measured width."
+  (pretty-tables-tests--with-pixels
+    (let ((pretty-tables--unit 10))
+      ;; 12 + 10 + 12 pixels.
+      (should (equal (pretty-tables--wrap "iii iii aa" 34) '("iii iii" "aa")))
+      (should (equal (pretty-tables--wrap "iii iii aa" 33) '("iii" "iii" "aa")))
+      ;; A paragraph that fits is not split.
+      (should (equal (pretty-tables--wrap "iii  iii" 100) '("iii  iii")))
+      (should (equal (pretty-tables--break-word "iiiiiiiiiia" 20)
+                     '("iiiii" "iiiii" "a"))))))
+
+(ert-deftest pretty-tables-test-pixel-column-widths ()
+  "In pixels, columns are narrowed one column of pixels at a time."
+  (let ((pretty-tables--unit 10))
+    ;; 100 + W + 70 fits 300 at W = 125, 18 columns narrower.
+    (should (equal (pretty-tables--column-widths '(100 305) 300 nil nil 70)
+                   '(100 125)))
+    ;; The floor is `pretty-tables-min-column-width' columns.
+    (should (equal (pretty-tables--column-widths '(100 305) 100 nil nil 70)
+                   '(80 80)))))
+
+(ert-deftest pretty-tables-test-pixel-separator ()
+  "In pixels, the adaptor draws a separator of `-' that fit each column.
+Each piece is filled with a stretch to the width of its column, so the
+vertical lines are where those of the other rows are."
+  (pretty-tables-tests--with-pixels
+    (pretty-tables-tests--with-buffer
+        "Title\n\n| iiii | b |\n|---|---|\n| x | y |\n"
+      (let ((rows (pretty-tables-tests--row-strings)))
+        (should (equal (mapcar #'pretty-tables-tests--pixel-width rows)
+                       '(96 96 96)))
+        ;; 16 pixels of text and 20 of sides take three `-', 30 pixels.
+        (should (equal (substring-no-properties (nth 1 rows)) "|--- |---|"))
+        (should (equal (get-text-property 4 'display (nth 1 rows))
+                       '(space :width (6))))))))
+
+(ert-deftest pretty-tables-test-pixel-line-width ()
+  "In pixels, `|' and the separator's `+' are centred in the wider of them."
+  (let ((pretty-tables-tests--char-pixels '((?| . 4) (?+ . 8)))
+        (separator (lambda (widths _alignments)
+                     (concat "|"
+                             (mapconcat (lambda (w) (make-string (+ 2 w) ?-))
+                                        widths "+")
+                             "|"))))
+    (pretty-tables-tests--with-pixels
+      (let ((pretty-tables--unit 10)
+            (pretty-tables--adaptor (list :separator separator)))
+        (should (= (pretty-tables--line-width 2 '(left left)) 8))
+        (let ((pretty-tables--line 8))
+          (should (equal (pretty-tables-tests--displays (pretty-tables--border nil))
+                         '(((space :width (2)) nil) (nil nil) ((space :width (2)) nil))))
+          ;; Two columns of 20 pixels and 10 on each side take four `-'
+          ;; each; `+' is 8 pixels wide already.
+          (let ((rule (pretty-tables--separator '(20 20) '(left left))))
+            (should (equal (substring-no-properties rule) " | ----+---- | "))
+            (should (= (pretty-tables-tests--pixel-width rule)
+                       (+ (* 3 8) (* 2 40))))))
+        (let ((pretty-tables-borders 'lines))
+          (should-not (pretty-tables--line-width 2 '(left left))))))))
 
 (ert-deftest pretty-tables-test-stripe-under-cell-faces ()
   "The row face comes after the faces of the cell text."

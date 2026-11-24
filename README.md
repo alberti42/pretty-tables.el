@@ -14,6 +14,8 @@ Each mode is a buffer-local minor mode, and nothing of *markdown-ts-mode* or *or
 
 Column widths come from the text a reader sees in each cell: characters that are invisible (for example link markup hidden by *markdown-ts-hide-markup*, or the hidden part of an Org link) take no room. When the table is wider than *pretty-tables-width*, the widest columns are narrowed and their cells are word-wrapped onto several screen lines. In Markdown, `<br>` in a cell starts a new line. LaTeX equations in a table cell are drawn as images with [*latex-to-svg*](https://github.com/alberti42/latex-to-svg); see [Images in cells](#images-in-cells).
 
+On a graphical display the cells are measured in pixels, in the faces they are drawn with, so a variable-pitch font, or a character drawn in a fallback font, keeps the columns aligned; on a text terminal they are counted in columns. *pretty-tables-width* and *pretty-tables-min-column-width* are in columns; on a graphical display a column is the width of the font of the table face, *markdown-ts-table* or *org-table*. With *pretty-tables-borders* set to `ascii`, the `-` of a separator row can end up to one `-` short of the next `|` or `+`.
+
 *pretty-tables-for-markdown* was called *markdown-table-view* up to version 0.1.0. [`CHANGELOG.md`](CHANGELOG.md) lists the names that changed.
 
 ## Why
@@ -117,7 +119,7 @@ The options below and the faces belong to *pretty-tables*, so they apply to both
 
 |Option                          |Default|Meaning                                                                      |
 |--------------------------------|-------|-----------------------------------------------------------------------------|
-|`pretty-tables-width`           |`nil`  |Maximum width, in columns, of a displayed table. When nil, use `fill-column`.|
+|`pretty-tables-width`           |`nil`  |Maximum width, in columns, of a displayed table. When nil, use `fill-column`. On a graphical display a column is the width of the font of the adaptor's table face, such as `org-table`.|
 |`pretty-tables-max-width`       |`nil`  |Most width, in columns, of a table when `pretty-tables-width` is `window`. When nil, the table may be as wide as the window.|
 |`pretty-tables-min-column-width`|`8`    |Width below which a column is not narrowed to fit the table width.           |
 |`pretty-tables-stripe-rows`     |`t`    |Non-nil means data rows are drawn with alternating backgrounds.              |
