@@ -43,7 +43,7 @@ jobs:
   pack:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: What is being built
         id: what
@@ -113,11 +113,11 @@ jobs:
       # commit, produced these bytes, kept in GitHub's attestation store
       # rather than among the assets.  It is made here, in the job that
       # packed the files, so a dry run exercises it too.
-      - uses: actions/attest-build-provenance@v3
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: assets/*
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: release
           path: |
@@ -132,7 +132,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: release
 
@@ -140,7 +140,7 @@ jobs:
         run: |
           cd assets && sha256sum * > SHA256SUMS && cat SHA256SUMS
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: assets/*
           body_path: body.md

@@ -41,7 +41,7 @@ jobs:
     outputs:
       skip: ${{ steps.check.outputs.skip }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - id: check
         if: github.event_name == 'push'
@@ -62,7 +62,7 @@ jobs:
     # it is here as early warning, not as a gate.
     continue-on-error: ${{ matrix.emacs_version == 'snapshot' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: purcell/setup-emacs@master
         with:
@@ -146,7 +146,7 @@ jobs:
     name: Org org-table.el vs. our copy, Emacs ${{ matrix.emacs_version }}
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: purcell/setup-emacs@master
         with:
