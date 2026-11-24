@@ -402,51 +402,25 @@ built without image support."
               (cons 'image spec))))
       image)))
 
-(defun pretty-tables--image-string (image width pos)
-  "Return the string that shows IMAGE, WIDTH pixels wide, in a cell.
-The string takes N columns, the fewest that hold WIDTH pixels.  Its
-first character shows IMAGE; the others, N - 1 characters and a
-zero-width space, show the space from the image to N columns, which
-the display engine computes from IMAGE itself.  The image shown is
-the copy of `pretty-tables--image-with-margin', which the space
-after it names too.  Every character has POS in `pretty-tables-pos'
-and (N) in `pretty-tables-image'; `pretty-tables--break-word' does
-not split the string."
-  (let* ((image (pretty-tables--image-with-margin image))
-         (font (default-font-width))
-         (n (max 1 (ceiling width font)))
-         (string (concat (make-string n ?x) "\u200b")))
-    (put-text-property 0 1 'display image string)
-    (put-text-property 1 (length string) 'display
-                       `(space :width (- (,(* n font)) (1 . ,image)))
-                       string)
-    (add-text-properties 0 (length string)
-                         (list 'pretty-tables-pos pos
-                               ;; A new list for each image, so that two
-                               ;; images side by side stay apart.
-                               'pretty-tables-image (list n))
-                         string)
+(defun pretty-tables--image-string (image pos)
+  "Return the string that shows IMAGE in a cell.
+It is one character, showing the copy of IMAGE that
+`pretty-tables--image-with-margin' returns.  It has POS in
+`pretty-tables-pos', and in `pretty-tables-image' a list of its
+width in pixels, measured with `pretty-tables--width'."
+  (let ((string (propertize "x" 'display (pretty-tables--image-with-margin image)
+                            'pretty-tables-pos pos)))
+    (put-text-property 0 1 'pretty-tables-image
+                       (list (pretty-tables--width string)) string)
     string))
-
-(defun pretty-tables--image-width (image)
-  "Return the width in pixels at which IMAGE is displayed, or nil.
-That is its `:width' times its `:scale': a number, or `default', which
-`create-image' gives and which stands for `image-scaling-factor'.  Nil
-when IMAGE has no `:width' in pixels."
-  (let ((width (image-property image :width))
-        (scale (image-property image :scale)))
-    (and (numberp width)
-         (* width (cond ((numberp scale) scale)
-                        ((eq scale 'default) (image-compute-scaling-factor))
-                        (t 1))))))
 
 (defun pretty-tables--visible-string (beg end)
   "Return the text between BEG and END as it is displayed.
 Invisible characters are dropped and a `display' string replaces the
 text it covers, with its newlines read as spaces.  A `display' image
-with a `:width' in pixels is shown as an image, on a graphical
-display; see `pretty-tables--image-width' and
-`pretty-tables--image-string'.  Whether a
+is shown as an image, see `pretty-tables--image-string', when the
+table is laid out in pixels (`pretty-tables--unit' is non-nil) on a
+display that can show images.  Whether a
 character is invisible is decided by the adaptor's `:invisible'
 function, by default `invisible-p'.  Each character carries the buffer
 position it came from in the `pretty-tables-pos' property."
@@ -460,16 +434,13 @@ position it came from in the `pretty-tables-pos' property."
       (let ((next (min (next-single-char-property-change pos 'invisible nil end)
                        (next-single-property-change pos 'invisible nil end)
                        (next-single-char-property-change pos 'display nil end)))
-            (display (get-char-property pos 'display))
-            image-width)
+            (display (get-char-property pos 'display)))
         (cond
          ((funcall invisible pos))
          ((and (eq (car-safe display) 'image)
-               ;; First: an Emacs that cannot show images may not define
-               ;; `image-scaling-factor'.
-               (display-images-p)
-               (setq image-width (pretty-tables--image-width display)))
-          (push (pretty-tables--image-string display image-width pos) parts))
+               pretty-tables--unit
+               (display-images-p))
+          (push (pretty-tables--image-string display pos) parts))
          ((stringp display)
           ;; A newline would end the drawn row's screen line inside a
           ;; cell.  latex-to-svg shows the spaces around display math
@@ -596,22 +567,11 @@ The width is that of `pretty-tables--width'."
 
 (defun pretty-tables--break-word (word width)
   "Split WORD into pieces no wider than WIDTH.
-An image (see `pretty-tables--image-string') is not split: a piece
-ends before it, or, when it starts the piece, after it."
+A piece is at least one character, so a character wider than WIDTH,
+such as an image, is a piece of its own."
   (let (pieces)
     (while (> (pretty-tables--width word) width)
-      (let* ((cut (pretty-tables--fit word width))
-             (image (and (< 0 cut (length word))
-                         (get-text-property cut 'pretty-tables-image word))))
-        (when (and image
-                   (eq image (get-text-property (1- cut) 'pretty-tables-image
-                                                word)))
-          (setq cut (or (previous-single-property-change
-                         cut 'pretty-tables-image word)
-                        0))
-          (when (= cut 0)
-            (setq cut (next-single-property-change
-                       0 'pretty-tables-image word (length word)))))
+      (let ((cut (pretty-tables--fit word width)))
         (when (= cut 0)
           (setq cut 1))
         (push (substring word 0 cut) pieces)
@@ -620,21 +580,16 @@ ends before it, or, when it starts the piece, after it."
 
 (defun pretty-tables--widest-image (paragraph)
   "Return the width of the widest image in PARAGRAPH, or 0.
-The images are those of `pretty-tables--image-string'.  In columns
-the width is the number in their `pretty-tables-image'; in pixels,
-when `pretty-tables--unit' is non-nil, it is measured."
+The images are those of `pretty-tables--image-string', and the width
+is the one in their `pretty-tables-image'."
   (let ((pos 0) (widest 0))
     (while (setq pos (text-property-not-all pos (length paragraph)
                                             'pretty-tables-image nil
                                             paragraph))
-      (let ((end (next-single-property-change pos 'pretty-tables-image
-                                              paragraph (length paragraph))))
-        (setq widest (max widest
-                          (if pretty-tables--unit
-                              (pretty-tables--width (substring paragraph pos end))
-                            (car (get-text-property
-                                  pos 'pretty-tables-image paragraph))))
-              pos end)))
+      (setq widest (max widest (car (get-text-property
+                                     pos 'pretty-tables-image paragraph)))
+            pos (next-single-property-change pos 'pretty-tables-image
+                                             paragraph (length paragraph))))
     widest))
 
 (defun pretty-tables--wrap (paragraph width)

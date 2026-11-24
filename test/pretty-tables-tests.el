@@ -294,14 +294,18 @@ End.
 Batch mode cannot show it, so it is never loaded.")
 
 (defmacro pretty-tables-tests--with-images (&rest body)
-  "Run BODY as on a graphical display whose font is 10 pixels wide.
-`pretty-tables-image-spacing' is 0, so the images are not copied;
-`pretty-tables-test-image-margin' tests the copy."
+  "Run BODY as on a graphical display that shows images.
+Tables are laid out in pixels, see `pretty-tables-tests--with-pixels',
+and `pretty-tables--unit' is 10.  `pretty-tables-image-spacing' is 0,
+so the images are not copied; `pretty-tables-test-image-margin' tests
+the copy.  `default-line-height' is 20: batch mode has no font."
   (declare (indent 0) (debug t))
-  `(cl-letf (((symbol-function 'display-images-p) #'always)
-             ((symbol-function 'default-font-width) (lambda () 10)))
-     (let ((pretty-tables-image-spacing 0))
-       ,@body)))
+  `(pretty-tables-tests--with-pixels
+     (cl-letf (((symbol-function 'display-images-p) #'always)
+               ((symbol-function 'default-line-height) (lambda () 20)))
+       (let ((pretty-tables-image-spacing 0)
+             (pretty-tables--unit 10))
+         ,@body))))
 
 (defvar pretty-tables-tests--image-height 30
   "Height in pixels that `image-size' returns in the margin tests.")
@@ -370,76 +374,66 @@ up."
       (let ((image pretty-tables-tests--image)
             (pretty-tables-image-spacing 0))
         (should (eq (pretty-tables--image-with-margin image) image)))
-      ;; The space after the image names the copy.
-      (cl-letf (((symbol-function 'default-font-width) (lambda () 10)))
-        (let* ((string (pretty-tables--image-string
-                        pretty-tables-tests--image 25 1))
-               (copy (get-text-property 0 'display string)))
-          (should (equal (image-property copy :margin) '(0 . 3)))
-          (should (eq (cdr (nth 2 (plist-get
-                                   (cdr (get-text-property 1 'display string))
-                                   :width)))
-                      copy)))))))
+      ;; The string shows the copy.
+      (cl-letf (((symbol-function 'pretty-tables--pixel-width)
+                 #'pretty-tables-tests--pixel-width))
+        (let* ((pretty-tables--unit 10)
+               (string (pretty-tables--image-string
+                        pretty-tables-tests--image 1)))
+          (should (equal (image-property (get-text-property 0 'display string)
+                                         :margin)
+                         '(0 . 3))))))))
 
 (ert-deftest pretty-tables-test-visible-string-image ()
-  "An image overlay with a width takes the columns that hold it."
+  "An image is one character, measured, with or without a `:width'.
+In columns, as on a text terminal, the text under the image is read."
   (with-temp-buffer
     (insert "a $x$ b")
     (let ((ov (make-overlay 3 6)))
       (overlay-put ov 'display pretty-tables-tests--image)
       (pretty-tables-tests--with-images
         (let ((s (pretty-tables--visible-string 1 8)))
-          ;; 25 pixels take 3 columns of 10 pixels.
-          (should (equal (substring-no-properties s) "a xxx\u200b b"))
-          (should (= (string-width s) 7))
+          (should (equal (substring-no-properties s) "a x b"))
           (should (eq (get-text-property 2 'display s)
                       pretty-tables-tests--image))
-          (should (equal (get-text-property 3 'display s)
-                         `(space :width (- (30) (1 . ,pretty-tables-tests--image)))))
-          (should (eq (get-text-property 3 'display s)
-                      (get-text-property 5 'display s)))
+          (should (equal (get-text-property 2 'pretty-tables-image s) '(25)))
+          (should (null (get-text-property 3 'display s)))
           (should (equal (mapcar (lambda (i)
                                    (get-text-property i 'pretty-tables-pos s))
                                  (number-sequence 0 (1- (length s))))
-                         '(1 2 3 3 3 3 6 7)))))
-      ;; Without a graphical display, the text is read.
-      (should (equal (substring-no-properties
-                      (pretty-tables--visible-string 1 8))
-                     "a $x$ b"))
-      ;; Without a width, the text is read.
-      (overlay-put ov 'display '(image :type svg :data "<svg/>"))
-      (pretty-tables-tests--with-images
-        (should (equal (substring-no-properties
-                        (pretty-tables--visible-string 1 8))
-                       "a $x$ b"))))))
-
-(ert-deftest pretty-tables-test-image-width ()
-  "An image's width is its `:width' times its `:scale'."
-  (should (equal (pretty-tables--image-width '(image :width 100 :scale 2.0))
-                 200.0))
-  (should (equal (pretty-tables--image-width '(image :width 100)) 100))
-  ;; `image-scaling-factor' is not defined in an Emacs without images.
-  (cl-letf (((symbol-function 'image-compute-scaling-factor)
-             (lambda (&optional _scaling) 1.5)))
-    (should (equal (pretty-tables--image-width
-                    '(image :width 100 :scale default))
-                   150.0)))
-  (should-not (pretty-tables--image-width '(image :scale 2.0)))
-  (should-not (pretty-tables--image-width '(image :width (2 . em)))))
+                         '(1 2 3 6 7)))
+          (should (= (pretty-tables--widest-image s) 25)))
+        ;; In columns, the text is read.
+        (let ((pretty-tables--unit nil))
+          (should (equal (substring-no-properties
+                          (pretty-tables--visible-string 1 8))
+                         "a $x$ b")))
+        ;; An image without a `:width' is measured too.
+        (overlay-put ov 'display '(image :type svg :data "<svg/>"))
+        (cl-letf (((symbol-function 'pretty-tables--pixel-width)
+                   (lambda (string)
+                     (if (eq (car-safe (get-text-property 0 'display string))
+                             'image)
+                         17
+                       (pretty-tables-tests--pixel-width string)))))
+          (let ((s (pretty-tables--visible-string 1 8)))
+            (should (equal (substring-no-properties s) "a x b"))
+            (should (equal (get-text-property 2 'pretty-tables-image s)
+                           '(17)))))))))
 
 (ert-deftest pretty-tables-test-break-word-image ()
-  "A word is not broken inside an image."
+  "An image is one character, so a word is not broken inside it."
   (pretty-tables-tests--with-images
-    (let* ((image (pretty-tables--image-string pretty-tables-tests--image 30 1))
+    (let* ((image (pretty-tables--image-string pretty-tables-tests--image 1))
            (word (concat "ab" image "cd")))
-      ;; A piece ends before the image.
+      ;; 10 + 10 + 25 + 10 + 10 pixels.
       (should (equal (mapcar #'substring-no-properties
-                             (pretty-tables--break-word word 4))
-                     '("ab" "xxx\u200bc" "d")))
-      ;; An image wider than the width starting a piece is kept whole.
+                             (pretty-tables--break-word word 40))
+                     '("ab" "xc" "d")))
+      ;; An image wider than the width is a piece of its own.
       (should (equal (mapcar #'substring-no-properties
-                             (pretty-tables--break-word (concat image "cd") 2))
-                     '("xxx\u200b" "cd"))))))
+                             (pretty-tables--break-word (concat image "cd") 20))
+                     '("x" "cd"))))))
 
 (ert-deftest pretty-tables-test-image-floor ()
   "No column is narrowed below its widest image."
@@ -462,9 +456,16 @@ up."
       (setq-local pretty-tables-width 20)
       (pretty-tables-tests--with-images
         (jit-lock-refontify)
-        (jit-lock-fontify-now))
-      (should (equal (pretty-tables-tests--rows)
-                     '("| aaaa     | xxxxxxxxxx\u200b |\n| bbbb     |            |\n| cccc     |            |"))))))
+        (jit-lock-fontify-now)
+        ;; The image is 95 pixels wide, and the first column is at
+        ;; `pretty-tables-min-column-width', 80 pixels.
+        (should (equal (mapcar #'pretty-tables-tests--as-columns
+                               (pretty-tables-tests--row-strings))
+                       '("| aaaa     | x |\n| bbbb     |           |\n| cccc     |           |")))
+        (should (equal (mapcar #'pretty-tables-tests--pixel-width
+                               (split-string (car (pretty-tables-tests--row-strings))
+                                             "\n"))
+                       '(245 245 245)))))))
 
 (ert-deftest pretty-tables-test-visible-string-newline ()
   "A newline in a `display' string is read as a space."

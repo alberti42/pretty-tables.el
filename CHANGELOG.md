@@ -19,6 +19,7 @@ to `X.Y.Z`.
 ### Changed
 
 - On a graphical display, tables are laid out in pixels: each cell is measured in the faces it is drawn with, so a character the table's font lacks, such as `★`, drawn in a wider fallback font, and a variable-pitch font no longer put the columns out of line. `pretty-tables-width` and `pretty-tables-min-column-width` are still in columns, a column being the width of the font of the table face (`markdown-ts-table`, `org-table`); with a fixed-pitch font, a table is drawn as before. With `ascii` borders, the `-` of a separator row can end up to one `-` short of the next `|` or `+`. On a text terminal, tables are laid out in columns.
+- An image in a cell is measured as it is displayed and takes its own width, no longer rounded up to whole columns; its spec needs no `:width`.
 
 ## [0.6.0] - 2026-11-08
 
