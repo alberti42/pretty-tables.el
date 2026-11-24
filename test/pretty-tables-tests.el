@@ -1415,8 +1415,21 @@ of the new text.  A newline typed in the row draws the table at once."
       (search-forward "c")
       (insert "ccc")
       (should (eq pretty-tables--edited 'row))
-      (jit-lock-refontify)
-      (jit-lock-fontify-now)
+      ;; Within the table, the adaptor is not asked for the tables.
+      (let ((calls 0)
+            (table (overlay-get (car ovs) 'pretty-tables-table)))
+        (cl-letf* ((tables (symbol-function 'pretty-tables-tests--tables))
+                   ((symbol-function 'pretty-tables-tests--tables)
+                    (lambda (beg end)
+                      (setq calls (1+ calls))
+                      (funcall tables beg end))))
+          (jit-lock-refontify (car table) (cdr table))
+          (jit-lock-fontify-now)
+          (should (= calls 0))
+          ;; Past the table, it is, and the table is still not drawn.
+          (jit-lock-refontify)
+          (jit-lock-fontify-now)
+          (should (> calls 0))))
       (should (equal (pretty-tables-tests--overlays) ovs))
       ;; The revealed row keeps the string it had too.
       (should (equal (pretty-tables-tests--rows)

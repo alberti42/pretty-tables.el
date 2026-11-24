@@ -897,10 +897,15 @@ on each side, in pixels a stretch of `pretty-tables--unit' pixels."
 
 (defun pretty-tables--delete-overlays (beg end)
   "Delete the row overlays that overlap BEG to END.
-The overlays of `pretty-tables--add-spacing' go too."
+The overlays of `pretty-tables--add-spacing' go too.  The markers of
+their `pretty-tables-table' are set to point nowhere, so they no longer
+slow down editing."
   (dolist (ov (overlays-in beg end))
     (when (or (overlay-get ov 'pretty-tables)
               (overlay-get ov 'pretty-tables-spacing))
+      (when-let* ((bounds (overlay-get ov 'pretty-tables-table)))
+        (set-marker (car bounds) nil)
+        (set-marker (cdr bounds) nil))
       (delete-overlay ov))))
 
 (defun pretty-tables--add-spacing (pos)
@@ -1021,6 +1026,9 @@ the space of `pretty-tables--add-spacing'."
   ;; `get-char-property', which would return their `display' of "".
   (pretty-tables--delete-overlays (plist-get table :beg) (plist-get table :end))
   (let* ((rows (plist-get table :rows))
+         ;; Shared by the row overlays; see `pretty-tables--fontify'.
+         (bounds (cons (copy-marker (plist-get table :beg))
+                       (copy-marker (plist-get table :end) t)))
          (unit (or pretty-tables--unit 1))
          (data (mapcar (lambda (row)
                          (unless (eq (plist-get row :kind) 'separator)
@@ -1124,6 +1132,7 @@ the space of `pretty-tables--add-spacing'."
            ;; start of the string, not after it.
            (put-text-property 0 1 'cursor t string))
          (overlay-put ov 'pretty-tables t)
+         (overlay-put ov 'pretty-tables-table bounds)
          (overlay-put ov 'pretty-tables-string string)
          (overlay-put ov 'evaporate t)
          (if (eql beg revealed)
@@ -1167,9 +1176,20 @@ When the buffer changed only on the line of the revealed row
 that row is not drawn: the row is shown as its text, and the other
 rows keep their drawing until point leaves the row, when
 `pretty-tables--reveal' has the table drawn with the widths of the new
-text."
+text.  When BEG to END lies within that table, whose bounds are the
+markers of the row overlays' `pretty-tables-table', the adaptor is not
+asked for the tables."
   (cond
    (pretty-tables--rendering)
+   ;; Typing in the revealed row: the adaptor is not asked for the
+   ;; tables when BEG to END lies within the row's table.
+   ((and (eq pretty-tables--edited 'row)
+         pretty-tables--revealed
+         (overlay-buffer pretty-tables--revealed)
+         (let ((bounds (overlay-get pretty-tables--revealed
+                                    'pretty-tables-table)))
+           (and bounds (marker-position (car bounds))
+                (<= (car bounds) beg) (<= end (cdr bounds))))))
    (t
     (save-restriction
       (unless font-lock-dont-widen (widen))
