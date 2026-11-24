@@ -424,7 +424,9 @@ Invisible characters are dropped and a `display' string replaces the
 text it covers, with its newlines read as spaces.  A `display' image
 is shown as an image, see `pretty-tables--image-string', when the
 table is laid out in pixels (`pretty-tables--unit' is non-nil) on a
-display that can show images.  Whether a
+display that can show images.  A `space' display with a `:width' is
+kept as it is in pixels, and is read as N spaces in columns when its
+`:width' is a number N.  Whether a
 character is invisible is decided by the adaptor's `:invisible'
 function, by default `invisible-p'.  Each character carries the buffer
 position it came from in the `pretty-tables-pos' property."
@@ -450,6 +452,14 @@ position it came from in the `pretty-tables-pos' property."
           ;; cell.  latex-to-svg shows the spaces around display math
           ;; as one.
           (push (propertize (subst-char-in-string ?\n ?\s display)
+                            'pretty-tables-pos pos)
+                parts))
+         ((and pretty-tables--unit
+               (eq (car-safe display) 'space)
+               (plist-get (cdr display) :width))
+          ;; A copy: two stretches side by side whose `display' is the
+          ;; same object are shown as one.
+          (push (propertize " " 'display (copy-sequence display)
                             'pretty-tables-pos pos)
                 parts))
          ((and (eq (car-safe display) 'space)

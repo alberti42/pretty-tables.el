@@ -467,6 +467,23 @@ In columns, as on a text terminal, the text under the image is read."
                                              "\n"))
                        '(245 245 245)))))))
 
+(ert-deftest pretty-tables-test-visible-string-space-pixels ()
+  "In pixels, a `space' display is kept, as a new list."
+  (with-temp-buffer
+    (insert "abcd")
+    (let ((spec '(space :width 3)))
+      (put-text-property 2 3 'display spec)
+      (put-text-property 3 4 'display spec)
+      (cl-letf (((symbol-function 'pretty-tables--pixel-width)
+                 #'pretty-tables-tests--pixel-width))
+        (let* ((pretty-tables--unit 10)
+               (s (pretty-tables--visible-string 1 5)))
+          ;; `b' and `c' have the same `display', shown as one stretch.
+          (should (equal (substring-no-properties s) "a d"))
+          (should (equal (get-text-property 1 'display s) spec))
+          (should-not (eq (get-text-property 1 'display s) spec))
+          (should (= (pretty-tables-tests--pixel-width s) 50)))))))
+
 (ert-deftest pretty-tables-test-visible-string-newline ()
   "A newline in a `display' string is read as a space."
   (with-temp-buffer
