@@ -120,7 +120,7 @@ The options below and the faces belong to *pretty-tables*, so they apply to both
 
 |Option                          |Default|Meaning                                                                      |
 |--------------------------------|-------|-----------------------------------------------------------------------------|
-|`pretty-tables-width`           |`fill-column`|Maximum width, in columns, of a displayed table: `fill-column` (or `nil`), a number, or `text-area` for no width of its own. A table is never wider than the text area. On a graphical display a column is the width of the font of the adaptor's table face, such as `org-table`.|
+|`pretty-tables-width`           |`fill-column`|Maximum width, in columns, of a displayed table: `fill-column`, a number, or `text-area` for no width of its own. A table is never wider than the text area. On a graphical display a column is the width of the font of the adaptor's table face, such as `org-table`.|
 |`pretty-tables-min-column-width`|`8`    |Width below which a column is not narrowed to fit the table width.           |
 |`pretty-tables-stripe-rows`     |`t`    |Non-nil means data rows are drawn with alternating backgrounds.              |
 |`pretty-tables-row-lines`       |`nil`  |Non-nil means a line is drawn under each data row but the last.              |

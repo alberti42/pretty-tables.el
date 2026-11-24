@@ -74,8 +74,10 @@
 
 (defcustom pretty-tables-width 'fill-column
   "Maximum width, in columns, of a displayed table.
-`fill-column' means the value of `fill-column', and so does nil; a
-number means that many columns; `text-area' means no width of its own.
+`fill-column' means the value of `fill-column'; a number means that
+many columns; `text-area' means no width of its own.  nil, the value
+versions before 0.7.0 used for `fill-column', means `fill-column' too;
+it is deprecated.
 In every case a table is no wider than the text area of the narrowest
 window showing the buffer: the window without its margins and fringes,
 less the line numbers, less the column of the continuation glyph when
@@ -92,7 +94,7 @@ narrower than it is not widened."
   :type '(choice (const :tag "fill-column" fill-column)
                  (const :tag "The text area" text-area)
                  natnum
-                 (const :tag "fill-column (nil)" nil))
+                 (const :tag "fill-column (nil, deprecated)" nil))
   :safe (lambda (value) (or (memq value '(nil fill-column text-area))
                             (natnump value))))
 

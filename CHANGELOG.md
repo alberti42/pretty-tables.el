@@ -28,6 +28,10 @@ to `X.Y.Z`.
 - A `space` display with a `:width` in a cell, such as one that hides link markup, keeps its width in a table laid out in pixels, where it was N spaces of the table's font.
 - The tables are drawn again after a command that changes the buffer's face remapping, such as `text-scale-adjust` or `buffer-face-mode`, and after the frame's font is set: a table laid out in pixels is measured in those fonts.
 
+### Deprecated
+
+- The value nil of `pretty-tables-width`: use `fill-column`, which means the same. nil still works.
+
 ## [0.6.0] - 2026-11-08
 
 ### Added
