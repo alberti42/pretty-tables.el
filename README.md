@@ -16,7 +16,7 @@ Column widths come from the text a reader sees in each cell: characters that are
 
 On a graphical display the cells are measured in pixels, in the faces they are drawn with, so a variable-pitch font, or a character drawn in a fallback font, keeps the columns aligned; on a text terminal they are counted in columns. *pretty-tables-width* and *pretty-tables-min-column-width* are in columns; on a graphical display a column is the width of the font of the table face, *markdown-ts-table* or *org-table*. With *pretty-tables-borders* set to `ascii`, the `-` of a separator row can end up to one `-` short of the next `|` or `+`.
 
-*pretty-tables-for-markdown* was called *markdown-table-view* up to version 0.1.0. [`CHANGELOG.md`](CHANGELOG.md) lists the names that changed.
+Disclosure: Written with AI assistance (Claude). Every change is reviewed and tested by the author, and design decisions are the author's.
 
 ## Why
 
