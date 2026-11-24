@@ -218,12 +218,6 @@ Each GitHub release carries `pretty-tables-X.Y.Z.tar.gz`, built from the tag wit
 gh attestation verify pretty-tables-X.Y.Z.tar.gz --repo alberti42/pretty-tables.el
 ```
 
-Release 0.1.0 was published as *markdown-table-view*, before the repository was renamed, and its attestations name the old repository. Its files verify with `--repo alberti42/markdown-table-view.el` and fail with `--repo alberti42/pretty-tables.el`:
-
-```sh
-gh attestation verify markdown-table-view-0.1.0.tar.gz --repo alberti42/markdown-table-view.el
-```
-
 `SHA256SUMS` only shows that a download is not corrupted, because it is published beside the files it describes. The attestation is kept in GitHub's attestation store, so replacing a release asset does not replace its attestation.
 
 ## License
