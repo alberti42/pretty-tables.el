@@ -12,6 +12,10 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- The command `pretty-tables-redraw`: it draws the tables of the current buffer again, measuring its windows first, for a hook of a package that changes what the tables are drawn in, such as window margins, without running the window hooks. It ignores its arguments, so any hook can call it.
+
 ### Fixed
 
 - A table drawn to the text area was as wide as the window without its margins when a package set the margins from a window hook after the window changed, such as one that wraps lines at a column: the text area is measured again when the last window hooks of a redisplay run.

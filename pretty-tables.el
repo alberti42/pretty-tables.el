@@ -1470,6 +1470,16 @@ variable watcher sees it: the list is compared with the copy in
 
 ;;; Interface
 
+(defun pretty-tables-redraw (&rest _)
+  "Draw the tables of the current buffer again, measuring its windows first.
+For a hook of a package that changes what the tables are drawn in, such
+as window margins, without running the window hooks.  Its arguments are
+ignored, so any hook can call it."
+  (interactive)
+  (when pretty-tables--adaptor
+    (setq pretty-tables--text-area (pretty-tables--text-area-width))
+    (jit-lock-refontify)))
+
 (defun pretty-tables-enable (&rest adaptor)
   "Draw the tables of the current buffer with aligned, wrapped columns.
 An adaptor calls this from its minor mode.  ADAPTOR is a plist:

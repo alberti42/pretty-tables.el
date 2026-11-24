@@ -867,6 +867,29 @@ default depth.  The hook calls its functions with no argument."
                        (window-max-chars-per-line)))))
       (remove-hook 'window-configuration-change-hook margins))))
 
+(ert-deftest pretty-tables-test-redraw-command ()
+  "`pretty-tables-redraw' measures the windows and draws the current buffer.
+No window shows the buffer, so a text area left from before is nil
+after it.  Another buffer with a mode on is not drawn again, and any
+arguments a hook passes are ignored."
+  (should (commandp #'pretty-tables-redraw))
+  (pretty-tables-tests--with-buffer "Title\n\n| c |\n"
+    (let ((other (current-buffer)))
+      (pretty-tables-tests--with-buffer "Title\n\n| a | b |\n"
+        (setq pretty-tables--text-area 5)
+        (should (get-text-property (point-min) 'fontified))
+        (pretty-tables-redraw (selected-frame))
+        (should-not pretty-tables--text-area)
+        (should-not (get-text-property (point-min) 'fontified))
+        (should (with-current-buffer other
+                  (get-text-property (point-min) 'fontified)))
+        (jit-lock-fontify-now)
+        (should (equal (pretty-tables-tests--rows) '("| a | b |"))))))
+  ;; In a buffer without a mode on, it does nothing.
+  (with-temp-buffer
+    (pretty-tables-redraw)
+    (should-not pretty-tables--text-area)))
+
 (ert-deftest pretty-tables-test-window-size-redraws ()
   "A narrower text area draws the table again.
 The window change marks the table for jit-lock, which draws it at the

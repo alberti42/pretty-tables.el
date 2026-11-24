@@ -113,6 +113,7 @@ With *straight.el*, from a local clone, one recipe per package, *pretty-tables* 
 - After a scroll command, a row point moved onto stays drawn until the next command. A scroll command is one with a non-nil *scroll-command* property: *mwheel-scroll*, *pixel-scroll-precision*, *scroll-up-command*, *scroll-down-command* and the other scroll commands of Emacs.
 - Clicking a character of a drawn row moves point to that character in the buffer, and follows the link there if there is one. In Markdown the link is followed with the command RET runs there; in Org it is opened with *org-open-at-point*.
 - In Markdown, *markdown-ts-toggle-hide-markup* (`C-c C-x C-m`) shows and hides the markup; the tables are drawn again with the new widths.
+- *pretty-tables-redraw* draws the tables of the current buffer again, measuring its windows first. It is for a hook of a package that changes what the tables are drawn in, such as window margins, without running the window hooks; it ignores its arguments, so any hook can call it. The tables are drawn again by themselves when a window, a theme or the buffer's fonts change.
 
 ## Options
 
