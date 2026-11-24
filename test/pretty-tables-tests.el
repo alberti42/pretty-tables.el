@@ -1401,6 +1401,45 @@ vertical lines are where those of the other rows are."
       (should (overlay-get (nth 2 ovs) 'display))
       (should-not (overlay-get (nth 3 ovs) 'display)))))
 
+(ert-deftest pretty-tables-test-typing-in-revealed-row ()
+  "Typing in the revealed row does not draw the table again.
+The other rows keep their overlays and strings, also when the whole
+table is fontified again, as `markdown-ts-appear' has it after each
+change; when point leaves the row, the table is drawn with the widths
+of the new text.  A newline typed in the row draws the table at once."
+  (pretty-tables-tests--with-buffer "Title\n\n| a | b |\n| c | d |\n| e | f |\n"
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'self-insert-command))
+      (pretty-tables-tests--goto-row 1)
+      (pretty-tables--reveal)
+      (search-forward "c")
+      (insert "ccc")
+      (should (eq pretty-tables--edited 'row))
+      (jit-lock-refontify)
+      (jit-lock-fontify-now)
+      (should (equal (pretty-tables-tests--overlays) ovs))
+      ;; The revealed row keeps the string it had too.
+      (should (equal (pretty-tables-tests--rows)
+                     '("| a | b |" "| c | d |" "| e | f |")))
+      ;; Leaving the row draws the table with the new width.
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should-not pretty-tables--edited)
+      (jit-lock-fontify-now)
+      (should-not (memq (car (pretty-tables-tests--overlays)) ovs))
+      (should (equal (substring-no-properties
+                      (overlay-get (car (pretty-tables-tests--overlays))
+                                   'pretty-tables-string))
+                     "| a    | b |"))
+      ;; A newline typed in the revealed row reaches past its line.
+      (setq ovs (pretty-tables-tests--overlays))
+      (end-of-line)
+      (insert "\n| g | h |")
+      (should (eq pretty-tables--edited 'other))
+      (jit-lock-fontify-now)
+      (should-not pretty-tables--edited)
+      (should-not (memq (car (pretty-tables-tests--overlays)) ovs)))))
+
 (ert-deftest pretty-tables-test-reveal-read-only ()
   "In a read-only buffer the row point is on stays drawn by default.
 A row revealed before the buffer became read-only is drawn again."

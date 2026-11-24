@@ -237,6 +237,14 @@ A plist; non-nil means the tables of the buffer are drawn.")
 (defvar-local pretty-tables--revealed nil
   "Row overlay currently shown as raw text, or nil.")
 
+(defvar-local pretty-tables--edited nil
+  "How the buffer changed since the table of the revealed row was drawn.
+Nil when it did not change, `row' when every change lay on the line
+of the revealed row and added or deleted no newline, `other' else.
+Set by `pretty-tables--note-change'.  With `row',
+`pretty-tables--fontify' does not draw that table again;
+`pretty-tables--reveal' has it drawn when point leaves the row.")
+
 (defvar-local pretty-tables--remapping nil
   "A copy of `face-remapping-alist' when it was last compared.
 See `pretty-tables--check-remapping'.")
@@ -1123,6 +1131,25 @@ the space of `pretty-tables--add-spacing'."
            (pretty-tables--show-drawn ov t))))
      rows data hidden (append (cdr hidden) (list nil)) prefixes)))
 
+(defun pretty-tables--note-change (beg end &optional _length)
+  "Note in `pretty-tables--edited' a change of the text from BEG to END.
+In `before-change-functions', BEG to END is the text about to be
+replaced; in `after-change-functions', the new text.  When a row is
+revealed, the change is `row' if the text lies on the row's line and
+holds no newline, and `other' else; `other' stays until the table is
+drawn."
+  (let ((ov pretty-tables--revealed))
+    (when (and ov (overlay-buffer ov))
+      (setq pretty-tables--edited
+            (if (and (not (eq pretty-tables--edited 'other))
+                     (save-excursion
+                       (goto-char (overlay-start ov))
+                       (and (<= (pos-bol) beg) (<= end (pos-eol))))
+                     (not (string-search "\n" (buffer-substring-no-properties
+                                               beg end))))
+                'row
+              'other)))))
+
 (defun pretty-tables--fontify (beg end)
   "Draw every table that overlaps BEG to END.
 Runs from `jit-lock-functions' after font-lock, since the drawing reads
@@ -1134,8 +1161,16 @@ buffer too.
 A table whose `:raw' is non-nil is not drawn, and its row overlays
 are deleted.  The row `pretty-tables--reveal' revealed stays raw.
 Point is not used: `jit-lock-fontify-now' moves it to the start of the
-chunk."
-  (unless pretty-tables--rendering
+chunk.
+When the buffer changed only on the line of the revealed row
+\(`pretty-tables--edited' is `row'), as when typing in it, the table of
+that row is not drawn: the row is shown as its text, and the other
+rows keep their drawing until point leaves the row, when
+`pretty-tables--reveal' has the table drawn with the widths of the new
+text."
+  (cond
+   (pretty-tables--rendering)
+   (t
     (save-restriction
       (unless font-lock-dont-widen (widen))
       (let* ((pretty-tables--rendering t)
@@ -1143,15 +1178,34 @@ chunk."
                                        (pretty-tables--column-pixels)))
              (pretty-tables--widths (make-hash-table :test #'eq :weakness 'key))
              (revealed (and pretty-tables--revealed
-                            (overlay-start pretty-tables--revealed))))
-        (pretty-tables--delete-overlays beg end)
-        (dolist (table (funcall (plist-get pretty-tables--adaptor :tables)
-                                beg end))
-          (if (plist-get table :raw)
-              (pretty-tables--delete-overlays (plist-get table :beg)
-                                              (plist-get table :end))
-            (jit-lock-fontify-now (plist-get table :beg) (plist-get table :end))
-            (pretty-tables--render-table table revealed)))))))
+                            (overlay-start pretty-tables--revealed)))
+             (tables (funcall (plist-get pretty-tables--adaptor :tables)
+                              beg end))
+             (holds-revealed (lambda (table)
+                               (and revealed
+                                    (<= (plist-get table :beg) revealed)
+                                    (< revealed (plist-get table :end)))))
+             ;; The table of the revealed row, when only that row changed.
+             (kept (and (eq pretty-tables--edited 'row)
+                        (seq-find holds-revealed tables))))
+        (if (not kept)
+            (pretty-tables--delete-overlays beg end)
+          (when (< beg (plist-get kept :beg))
+            (pretty-tables--delete-overlays beg (plist-get kept :beg)))
+          (when (< (plist-get kept :end) end)
+            (pretty-tables--delete-overlays (plist-get kept :end) end)))
+        (dolist (table tables)
+          (cond
+           ((eq table kept))
+           ((plist-get table :raw)
+            (pretty-tables--delete-overlays (plist-get table :beg)
+                                            (plist-get table :end)))
+           (t
+            (jit-lock-fontify-now (plist-get table :beg)
+                                  (plist-get table :end))
+            (pretty-tables--render-table table revealed)
+            (when (funcall holds-revealed table)
+              (setq pretty-tables--edited nil))))))))))
 
 ;;; Point and mouse
 
@@ -1164,7 +1218,10 @@ chunk."
   "Show the row point is on as raw text, and draw the one point left.
 The row is shown as raw text when `pretty-tables-reveal' says so, or
 during an Isearch.  After a command with a non-nil `scroll-command'
-property, a row point moved onto stays drawn."
+property, a row point moved onto stays drawn.  When the buffer
+changed since the table of the row point left was drawn
+\(`pretty-tables--edited'), that row's line is fontified again, and
+`pretty-tables--fontify' draws its table with the new text."
   (let ((ov (pretty-tables--row-overlay-at-point))
         (old pretty-tables--revealed))
     (unless (or isearch-mode
@@ -1176,8 +1233,14 @@ property, a row point moved onto stays drawn."
                (not (eq ov old)))
       (setq ov nil))
     (unless (eq ov old)
-      (when (and old (overlay-buffer old))
-        (pretty-tables--show-drawn old t))
+      (cond
+       (pretty-tables--edited
+        (setq pretty-tables--edited nil)
+        (if (and old (overlay-buffer old))
+            (jit-lock-refontify (overlay-start old) (overlay-end old))
+          (jit-lock-refontify)))
+       ((and old (overlay-buffer old))
+        (pretty-tables--show-drawn old t)))
       (when ov
         (pretty-tables--show-drawn ov nil))
       (setq pretty-tables--revealed ov))))
@@ -1361,6 +1424,8 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (add-hook 'post-command-hook #'pretty-tables--reveal nil t)
   (setq pretty-tables--remapping (copy-tree face-remapping-alist))
   (add-hook 'post-command-hook #'pretty-tables--check-remapping nil t)
+  (add-hook 'before-change-functions #'pretty-tables--note-change nil t)
+  (add-hook 'after-change-functions #'pretty-tables--note-change nil t)
   (add-hook 'window-size-change-functions #'pretty-tables--windows-changed)
   (add-hook 'window-buffer-change-functions #'pretty-tables--windows-changed)
   (setq pretty-tables--window-columns (pretty-tables--window-width))
@@ -1380,9 +1445,12 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (jit-lock-unregister #'pretty-tables--fontify)
   (remove-hook 'post-command-hook #'pretty-tables--reveal t)
   (remove-hook 'post-command-hook #'pretty-tables--check-remapping t)
+  (remove-hook 'before-change-functions #'pretty-tables--note-change t)
+  (remove-hook 'after-change-functions #'pretty-tables--note-change t)
   (pretty-tables--delete-overlays (point-min) (point-max))
   (setq pretty-tables--window-columns nil
         pretty-tables--revealed nil
+        pretty-tables--edited nil
         pretty-tables--adaptor nil)
   (font-lock-flush))
 
