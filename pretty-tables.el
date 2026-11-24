@@ -406,14 +406,54 @@ built without image support."
               (cons 'image spec))))
       image)))
 
+(defun pretty-tables--position (string index)
+  "Return the buffer position character INDEX of STRING comes from, or nil.
+The position is read from `pretty-tables-pos', which a cell string
+has on runs of characters: an integer P on a run of buffer text that
+starts at P, each character one position after the one before it; a
+list (P) on a run whose characters all come from P, such as the text
+of a `display' string or an image."
+  (let ((value (get-text-property index 'pretty-tables-pos string)))
+    (cond
+     ((consp value) (car value))
+     (value (+ value (- index (or (previous-single-property-change
+                                   (1+ index) 'pretty-tables-pos string)
+                                  0)))))))
+
+(defun pretty-tables--substring (string from &optional to)
+  "Return the substring of STRING from FROM to TO, keeping its positions.
+When FROM is inside a run of buffer text in `pretty-tables-pos', the
+part of that run in the substring gets the position of its first
+character, so `pretty-tables--position' reads the same positions in
+the substring as in STRING.  TO nil means the end of STRING."
+  (let ((value (and (< from (length string))
+                    (get-text-property from 'pretty-tables-pos string)))
+        (result (substring string from to)))
+    (when (integerp value)
+      (let ((position (pretty-tables--position string from)))
+        (unless (= position value)
+          (put-text-property 0 (next-single-property-change
+                                0 'pretty-tables-pos result (length result))
+                             'pretty-tables-pos position result))))
+    result))
+
+(defun pretty-tables--trim (string)
+  "Return STRING without the whitespace at its start and end.
+It is cut with `pretty-tables--substring'."
+  (let ((start (if (string-match "\\`[ \t\n\r]+" string) (match-end 0) 0))
+        (end (if (string-match "[ \t\n\r]+\\'" string)
+                 (match-beginning 0)
+               (length string))))
+    (pretty-tables--substring string start (max start end))))
+
 (defun pretty-tables--image-string (image pos)
   "Return the string that shows IMAGE in a cell.
 It is one character, showing the copy of IMAGE that
-`pretty-tables--image-with-margin' returns.  It has POS in
+`pretty-tables--image-with-margin' returns.  It has (POS) in
 `pretty-tables-pos', and in `pretty-tables-image' a list of its
 width in pixels, measured with `pretty-tables--width'."
   (let ((string (propertize "x" 'display (pretty-tables--image-with-margin image)
-                            'pretty-tables-pos pos)))
+                            'pretty-tables-pos (list pos))))
     (put-text-property 0 1 'pretty-tables-image
                        (list (pretty-tables--width string)) string)
     string))
@@ -428,8 +468,11 @@ display that can show images.  A `space' display with a `:width' is
 kept as it is in pixels, and is read as N spaces in columns when its
 `:width' is a number N.  Whether a
 character is invisible is decided by the adaptor's `:invisible'
-function, by default `invisible-p'.  Each character carries the buffer
-position it came from in the `pretty-tables-pos' property."
+function, by default `invisible-p'.  The buffer position each
+character comes from is in the `pretty-tables-pos' property, by run;
+see `pretty-tables--position'.  A value per character would make
+each character an interval of its own, and `substring' and `concat'
+copy each interval and its property list."
   (let ((invisible (or (plist-get pretty-tables--adaptor :invisible)
                        #'invisible-p))
         (pos beg) parts)
@@ -452,7 +495,7 @@ position it came from in the `pretty-tables-pos' property."
           ;; cell.  latex-to-svg shows the spaces around display math
           ;; as one.
           (push (propertize (subst-char-in-string ?\n ?\s display)
-                            'pretty-tables-pos pos)
+                            'pretty-tables-pos (list pos))
                 parts))
          ((and pretty-tables--unit
                (eq (car-safe display) 'space)
@@ -460,17 +503,16 @@ position it came from in the `pretty-tables-pos' property."
           ;; A copy: two stretches side by side whose `display' is the
           ;; same object are shown as one.
           (push (propertize " " 'display (copy-sequence display)
-                            'pretty-tables-pos pos)
+                            'pretty-tables-pos (list pos))
                 parts))
          ((and (eq (car-safe display) 'space)
                (natnump (plist-get (cdr display) :width)))
           (push (propertize (make-string (plist-get (cdr display) :width) ?\s)
-                            'pretty-tables-pos pos)
+                            'pretty-tables-pos (list pos))
                 parts))
          (t
           (let ((s (buffer-substring pos next)))
-            (dotimes (i (length s))
-              (put-text-property i (1+ i) 'pretty-tables-pos (+ pos i) s))
+            (put-text-property 0 (length s) 'pretty-tables-pos pos s)
             (push s parts))))
         (setq pos next)))
     (apply #'concat (nreverse parts))))
@@ -479,12 +521,18 @@ position it came from in the `pretty-tables-pos' property."
   "Return the displayed text of the cell from BEG to END.
 The value is a list of strings, one per piece separated by the
 adaptor's `:line-break' regexp, or a list of one string when the
-adaptor has none."
+adaptor has none.  The pieces are cut, and their whitespace trimmed,
+with `pretty-tables--substring', so they keep their positions."
   (let ((text (pretty-tables--visible-string beg end))
         (line-break (plist-get pretty-tables--adaptor :line-break))
-        (case-fold-search t))
-    (mapcar #'string-trim
-            (if line-break (split-string text line-break) (list text)))))
+        (case-fold-search t)
+        (start 0)
+        pieces)
+    (while (and line-break (string-match line-break text start))
+      (push (pretty-tables--substring text start (match-beginning 0)) pieces)
+      (setq start (match-end 0)))
+    (push (pretty-tables--substring text start) pieces)
+    (mapcar #'pretty-tables--trim (nreverse pieces))))
 
 ;;; Layout
 
@@ -588,8 +636,8 @@ such as an image, is a piece of its own."
       (let ((cut (pretty-tables--fit word width)))
         (when (= cut 0)
           (setq cut 1))
-        (push (substring word 0 cut) pieces)
-        (setq word (substring word cut))))
+        (push (pretty-tables--substring word 0 cut) pieces)
+        (setq word (pretty-tables--substring word cut))))
     (nreverse (cons word pieces))))
 
 (defun pretty-tables--widest-image (paragraph)
@@ -639,13 +687,15 @@ returned whole."
                     (if (funcall fits middle)
                         (setq low middle)
                       (setq high (1- middle)))))
-                (push (substring paragraph line-beg (cdr (aref words low)))
+                (push (pretty-tables--substring paragraph line-beg
+                                                (cdr (aref words low)))
                       lines)
                 (setq i (1+ low)
                       line-beg nil))
             (let* ((end (cdr (aref words i)))
                    (pieces (pretty-tables--break-word
-                            (substring paragraph line-beg end) width))
+                            (pretty-tables--substring paragraph line-beg end)
+                            width))
                    (last (car (last pieces))))
               (setq lines (append (reverse (butlast pieces)) lines))
               (if (string-empty-p last)
@@ -1148,8 +1198,7 @@ runs there."
   (let* ((posn (event-start event))
          (string (posn-string posn))
          (pos (or (and string
-                       (get-text-property (cdr string) 'pretty-tables-pos
-                                          (car string)))
+                       (pretty-tables--position (car string) (cdr string)))
                   (posn-point posn))))
     (select-window (posn-window posn))
     (goto-char pos)

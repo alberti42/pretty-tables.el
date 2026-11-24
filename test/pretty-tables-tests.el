@@ -284,7 +284,7 @@ End.
     (let ((s (pretty-tables--visible-string 1 7)))
       (should (equal (substring-no-properties s) "aXY   ef"))
       (should (equal (mapcar (lambda (i)
-                               (get-text-property i 'pretty-tables-pos s))
+                               (pretty-tables--position s i))
                              (number-sequence 0 (1- (length s))))
                      '(1 3 3 4 4 4 5 6))))))
 
@@ -399,7 +399,7 @@ In columns, as on a text terminal, the text under the image is read."
           (should (equal (get-text-property 2 'pretty-tables-image s) '(25)))
           (should (null (get-text-property 3 'display s)))
           (should (equal (mapcar (lambda (i)
-                                   (get-text-property i 'pretty-tables-pos s))
+                                   (pretty-tables--position s i))
                                  (number-sequence 0 (1- (length s))))
                          '(1 2 3 6 7)))
           (should (= (pretty-tables--widest-image s) 25)))
@@ -483,6 +483,54 @@ In columns, as on a text terminal, the text under the image is read."
           (should (equal (get-text-property 1 'display s) spec))
           (should-not (eq (get-text-property 1 'display s) spec))
           (should (= (pretty-tables-tests--pixel-width s) 50)))))))
+
+(ert-deftest pretty-tables-test-positions-after-cuts ()
+  "Each character of a wrapped line reads the buffer position it comes from.
+The positions are kept by run, so the cuts of splitting at a line
+break, trimming, wrapping and breaking a word put the position of its
+new first character on a run cut in the middle."
+  (with-temp-buffer
+    (insert "  alpha beta<br> gamma deltaepsilonzeta {x} eta  ")
+    ;; Hidden text is dropped, and a `display' string comes from the
+    ;; position of the text it covers.
+    (put-text-property 41 45 'invisible t)
+    (put-text-property 1 2 'display "Z")
+    (setq-local pretty-tables--adaptor (list :line-break "<br>"))
+    (let ((lines (mapcan (lambda (p) (pretty-tables--wrap p 7))
+                         (pretty-tables--cell-paragraphs 1 (point-max)))))
+      (should (equal (mapcar #'substring-no-properties lines)
+                     '("Z alpha" "beta" "gamma" "deltaep" "silonze" "ta eta")))
+      (dolist (line lines)
+        (dotimes (i (length line))
+          (let ((pos (pretty-tables--position line i)))
+            (if (eq (aref line i) ?Z)
+                (should (= pos 1))
+              (should (eq (char-after pos) (aref line i))))))))))
+
+(ert-deftest pretty-tables-test-positions-in-drawn-rows ()
+  "Each character of a drawn row with a position comes from that position.
+A click reads it with `pretty-tables--position'."
+  (dolist (pixels '(nil t))
+    (let ((check
+           (lambda ()
+             (pretty-tables-tests--with-buffer
+                 "Title\n\n| alpha beta gamma | *delta* epsilon |\n|---|---|\n| zeta eta | theta |\n"
+               (setq-local pretty-tables-width 25)
+               (jit-lock-refontify)
+               (jit-lock-fontify-now)
+               (let ((count 0))
+                 (dolist (row (pretty-tables-tests--row-strings))
+                   (dotimes (i (length row))
+                     (when-let* ((pos (pretty-tables--position row i)))
+                       (unless (eq (aref row i) ?\s)
+                         (setq count (1+ count)))
+                       (should (eq (char-after pos) (aref row i))))))
+                 ;; Each of the 40 characters of the cells that are not
+                 ;; spaces has a position.
+                 (should (= count 40)))))))
+      (if pixels
+          (pretty-tables-tests--with-pixels (funcall check))
+        (funcall check)))))
 
 (ert-deftest pretty-tables-test-visible-string-newline ()
   "A newline in a `display' string is read as a space."
