@@ -844,6 +844,29 @@ On a terminal it is `window-max-chars-per-line' columns."
           (should (= (buffer-local-value 'pretty-tables--text-area buffer)
                      (window-max-chars-per-line wide))))))))
 
+(ert-deftest pretty-tables-test-configuration-change-last ()
+  "The text area is measured again by the last window hook of a redisplay.
+A package that sets margins from `window-configuration-change-hook'
+has set them by then: the default value of the hook runs after the
+buffer-local ones, and the update is added after the functions of the
+default depth.  The hook calls its functions with no argument."
+  (let ((margins (lambda () nil)))
+    (add-hook 'window-configuration-change-hook margins)
+    (unwind-protect
+        (pretty-tables-tests--with-buffer "| a |\n"
+          (let ((hook (default-value 'window-configuration-change-hook)))
+            (should (memq #'pretty-tables--windows-changed hook))
+            (should (< (seq-position hook margins)
+                       (seq-position hook #'pretty-tables--windows-changed))))
+          (save-window-excursion
+            (delete-other-windows)
+            (set-window-buffer nil (current-buffer))
+            (setq pretty-tables--text-area nil)
+            (pretty-tables--windows-changed)
+            (should (= pretty-tables--text-area
+                       (window-max-chars-per-line)))))
+      (remove-hook 'window-configuration-change-hook margins))))
+
 (ert-deftest pretty-tables-test-window-size-redraws ()
   "A narrower text area draws the table again.
 The window change marks the table for jit-lock, which draws it at the

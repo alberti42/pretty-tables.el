@@ -12,6 +12,10 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- A table drawn to the text area was as wide as the window without its margins when a package set the margins from a window hook after the window changed, such as one that wraps lines at a column: the text area is measured again when the last window hooks of a redisplay run.
+
 ## [0.7.0] - 2026-11-24
 
 ### Added

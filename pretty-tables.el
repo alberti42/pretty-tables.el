@@ -1428,12 +1428,17 @@ of every table, see `pretty-tables-width'."
       (setq pretty-tables--text-area width)
       (jit-lock-refontify))))
 
-(defun pretty-tables--windows-changed (_frame)
+(defun pretty-tables--windows-changed (&optional _frame)
   "Update `pretty-tables--text-area' in every buffer an adaptor is on.
-Runs from the default values of `window-size-change-functions' and
-`window-buffer-change-functions'.  Their buffer-local values would not
-run for a buffer when a window stops showing it, which can widen the
-narrowest window that still does."
+Runs from the default values of `window-size-change-functions',
+`window-buffer-change-functions' and `window-configuration-change-hook'.
+Their buffer-local values would not run for a buffer when a window
+stops showing it, which can widen the narrowest window that still
+does.  `window-configuration-change-hook' runs last among the window
+hooks, and its default value after its buffer-local ones: a package
+that sets the margins of a window from one of these hooks, such as one
+that wraps lines at a column, has set them by then.  A change made by a
+window hook does not make them run again."
   (dolist (buffer (buffer-list))
     (when (buffer-local-value 'pretty-tables--adaptor buffer)
       (with-current-buffer buffer
@@ -1536,6 +1541,7 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (add-hook 'after-change-functions #'pretty-tables--note-change nil t)
   (add-hook 'window-size-change-functions #'pretty-tables--windows-changed)
   (add-hook 'window-buffer-change-functions #'pretty-tables--windows-changed)
+  (add-hook 'window-configuration-change-hook #'pretty-tables--windows-changed 90)
   (setq pretty-tables--text-area (pretty-tables--text-area-width))
   ;; `add-variable-watcher' adds a function only once.  The watchers
   ;; of `pretty-tables--options' are added when the file loads.
@@ -1573,6 +1579,7 @@ The watchers are those of `pretty-tables--options'.  Called by
   (remove-hook 'after-setting-font-hook #'pretty-tables--redraw-all)
   (remove-hook 'window-size-change-functions #'pretty-tables--windows-changed)
   (remove-hook 'window-buffer-change-functions #'pretty-tables--windows-changed)
+  (remove-hook 'window-configuration-change-hook #'pretty-tables--windows-changed)
   nil)
 
 (provide 'pretty-tables)
