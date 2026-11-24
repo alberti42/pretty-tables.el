@@ -237,6 +237,10 @@ A plist; non-nil means the tables of the buffer are drawn.")
 (defvar-local pretty-tables--revealed nil
   "Row overlay currently shown as raw text, or nil.")
 
+(defvar-local pretty-tables--remapping nil
+  "A copy of `face-remapping-alist' when it was last compared.
+See `pretty-tables--check-remapping'.")
+
 (defvar pretty-tables--rendering nil
   "Non-nil while a table is being drawn.
 Stops the nested `jit-lock-fontify-now' from running the drawing
@@ -1205,16 +1209,29 @@ narrowest window that still does."
       (with-current-buffer buffer
         (pretty-tables--update-window-columns)))))
 
-(defun pretty-tables--theme-changed (_theme)
-  "Draw the tables again after a theme is enabled or disabled.
-The drawn rows hold the backgrounds `pretty-tables--row-face' read
-from the theme, so a new theme shows only once the tables are drawn
-again.  Runs from `enable-theme-functions' and
-`disable-theme-functions'."
+(defun pretty-tables--redraw-all (&rest _)
+  "Draw the tables of every buffer again.
+Runs from `enable-theme-functions' and `disable-theme-functions': the
+drawn rows hold the backgrounds `pretty-tables--row-face' read from
+the theme, so a new theme shows only once the tables are drawn again.
+Runs from `after-setting-font-hook' too: a table laid out in pixels is
+measured in the frame's fonts."
   (dolist (buffer (buffer-list))
     (with-current-buffer buffer
       (when pretty-tables--adaptor
         (jit-lock-refontify)))))
+
+(defun pretty-tables--check-remapping ()
+  "Draw the tables again when the buffer's face remapping has changed.
+A table laid out in pixels is measured in the buffer's faces, which
+`text-scale-adjust', `buffer-face-mode' and `face-remap-add-relative'
+change through `face-remapping-alist'.  `face-remap-add-relative'
+changes the list in place when the face has an entry already, so no
+variable watcher sees it: the list is compared with the copy in
+`pretty-tables--remapping'.  Runs from `post-command-hook'."
+  (unless (equal face-remapping-alist pretty-tables--remapping)
+    (setq pretty-tables--remapping (copy-tree face-remapping-alist))
+    (jit-lock-refontify)))
 
 ;;; Interface
 
@@ -1283,6 +1300,8 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (remove-hook 'jit-lock-functions #'pretty-tables--fontify t)
   (add-hook 'jit-lock-functions #'pretty-tables--fontify 90 t)
   (add-hook 'post-command-hook #'pretty-tables--reveal nil t)
+  (setq pretty-tables--remapping (copy-tree face-remapping-alist))
+  (add-hook 'post-command-hook #'pretty-tables--check-remapping nil t)
   (add-hook 'window-size-change-functions #'pretty-tables--windows-changed)
   (add-hook 'window-buffer-change-functions #'pretty-tables--windows-changed)
   (setq pretty-tables--window-columns (pretty-tables--window-width))
@@ -1290,8 +1309,9 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   ;; of `pretty-tables--options' are added when the file loads.
   (dolist (option (plist-get adaptor :options))
     (add-variable-watcher option #'pretty-tables--option-changed))
-  (add-hook 'enable-theme-functions #'pretty-tables--theme-changed)
-  (add-hook 'disable-theme-functions #'pretty-tables--theme-changed)
+  (add-hook 'enable-theme-functions #'pretty-tables--redraw-all)
+  (add-hook 'disable-theme-functions #'pretty-tables--redraw-all)
+  (add-hook 'after-setting-font-hook #'pretty-tables--redraw-all)
   ;; Not `font-lock-flush', which does nothing in a buffer without
   ;; font-lock keywords; in a buffer with them, it calls this.
   (jit-lock-refontify))
@@ -1300,6 +1320,7 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   "Stop drawing the tables of the current buffer, and show their text."
   (jit-lock-unregister #'pretty-tables--fontify)
   (remove-hook 'post-command-hook #'pretty-tables--reveal t)
+  (remove-hook 'post-command-hook #'pretty-tables--check-remapping t)
   (pretty-tables--delete-overlays (point-min) (point-max))
   (setq pretty-tables--window-columns nil
         pretty-tables--revealed nil
@@ -1312,8 +1333,9 @@ The watchers are those of `pretty-tables--options'.  Called by
 `unload-feature'; nil means unloading continues."
   (dolist (option pretty-tables--options)
     (remove-variable-watcher option #'pretty-tables--option-changed))
-  (remove-hook 'enable-theme-functions #'pretty-tables--theme-changed)
-  (remove-hook 'disable-theme-functions #'pretty-tables--theme-changed)
+  (remove-hook 'enable-theme-functions #'pretty-tables--redraw-all)
+  (remove-hook 'disable-theme-functions #'pretty-tables--redraw-all)
+  (remove-hook 'after-setting-font-hook #'pretty-tables--redraw-all)
   (remove-hook 'window-size-change-functions #'pretty-tables--windows-changed)
   (remove-hook 'window-buffer-change-functions #'pretty-tables--windows-changed)
   nil)

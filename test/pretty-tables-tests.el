@@ -898,6 +898,28 @@ the file watches the options it adds."
     (setq-local pretty-tables-tests--option t)
     (should-not (get-text-property (point-min) 'fontified))))
 
+(ert-deftest pretty-tables-test-face-remapping-redraws ()
+  "A command that changes the face remapping draws the tables again.
+A table laid out in pixels is measured in the buffer's faces.
+`face-remap-add-relative' changes `face-remapping-alist' in place when
+the face has an entry already, as after `text-scale-increase'."
+  (pretty-tables-tests--with-buffer "Title\n\n| a | b |\n"
+    (should (memq #'pretty-tables--check-remapping post-command-hook))
+    (run-hooks 'post-command-hook)
+    (should (get-text-property (point-min) 'fontified))
+    (text-scale-increase 1)
+    (run-hooks 'post-command-hook)
+    (should-not (get-text-property (point-min) 'fontified))
+    (jit-lock-fontify-now)
+    (face-remap-add-relative 'default :family "Monospace")
+    (run-hooks 'post-command-hook)
+    (should-not (get-text-property (point-min) 'fontified))
+    (jit-lock-fontify-now)
+    (run-hooks 'post-command-hook)
+    (should (get-text-property (point-min) 'fontified))
+    (pretty-tables-disable)
+    (should-not (memq #'pretty-tables--check-remapping post-command-hook))))
+
 ;;; Stripes and row lines
 
 (ert-deftest pretty-tables-test-stripes ()
