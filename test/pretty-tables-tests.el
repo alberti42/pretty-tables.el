@@ -636,10 +636,9 @@ There `font-lock-fontified' is nil, and `font-lock-flush' does nothing."
 (ert-deftest pretty-tables-test-safe-local-variables ()
   "The options are safe as file-local variables with a value of their type."
   (dolist (case '((pretty-tables-width nil t) (pretty-tables-width 72 t)
-                  (pretty-tables-width window t) (pretty-tables-width fill nil)
-                  (pretty-tables-max-width nil t) (pretty-tables-max-width 120 t)
-                  (pretty-tables-max-width window nil)
-                  (pretty-tables-max-width -1 nil)
+                  (pretty-tables-width fill-column t)
+                  (pretty-tables-width text-area t)
+                  (pretty-tables-width window nil) (pretty-tables-width fill nil)
                   (pretty-tables-width -1 nil) (pretty-tables-width "72" nil)
                   (pretty-tables-min-column-width 8 t)
                   (pretty-tables-min-column-width -1 nil)
@@ -768,60 +767,62 @@ is read, as they do when jit-lock fontifies a window in chunks."
     (should (equal (car (last (pretty-tables-tests--rows)))
                    "| x | one two      |\n|   | three four   |"))))
 
-;;; Window width
+;;; The text area
 
-(defmacro pretty-tables-tests--with-window-width (width &rest body)
-  "Run BODY with the windows showing the current buffer WIDTH columns wide.
-`pretty-tables--windows-changed' runs first, as on a window change."
+(defmacro pretty-tables-tests--with-text-area (width &rest body)
+  "Run BODY with the text areas showing the current buffer WIDTH wide.
+`pretty-tables--windows-changed' runs first, as on a window change.
+The width is in pixels, which on the batch terminal are columns."
   (declare (indent 1) (debug t))
-  `(cl-letf (((symbol-function 'pretty-tables--window-width)
+  `(cl-letf (((symbol-function 'pretty-tables--text-area-width)
               (lambda () ,width)))
      (pretty-tables--windows-changed (selected-frame))
      ,@body))
 
 (ert-deftest pretty-tables-test-target-width ()
-  "The target width follows `pretty-tables-width'."
+  "The target width is `pretty-tables-width', no wider than the text area.
+The text area is less the widest prefix of the table's rows."
   (with-temp-buffer
-    (setq-local fill-column 70
-                pretty-tables--window-columns 100)
-    (let ((pretty-tables-width nil))
-      (should (= (pretty-tables--target-width 0) 70)))
-    (let ((pretty-tables-width 40))
-      (should (= (pretty-tables--target-width 4) 40)))
-    (let ((pretty-tables-width 'window)
-          (pretty-tables-max-width nil))
-      (should (= (pretty-tables--target-width 0) 100)))))
+    (setq-local fill-column 70)
+    ;; Width, text area, prefix, target.
+    (dolist (case '((fill-column nil 0 70)  ; No window: the width alone.
+                    (nil nil 0 70)          ; Nil is `fill-column'.
+                    (40 nil 4 40)
+                    (text-area nil 0 70)    ; No window: `fill-column'.
+                    (fill-column 100 0 70)  ; The width is narrower.
+                    (fill-column 60 0 60)   ; The text area is narrower.
+                    (fill-column 72 4 68)   ; A prefix takes room.
+                    (40 30 4 26)
+                    (0 100 0 0)
+                    (text-area 100 0 100)
+                    (text-area 100 4 96)))
+      (setq-local pretty-tables-width (nth 0 case)
+                  pretty-tables--text-area (nth 1 case))
+      (should (= (pretty-tables--target-width (nth 2 case)) (nth 3 case))))
+    ;; In pixels, a width in columns is multiplied by the pixels of a
+    ;; column, and the text area is in pixels already.
+    (let ((pretty-tables--unit 10))
+      (setq-local pretty-tables-width 'fill-column
+                  pretty-tables--text-area 650)
+      (should (= (pretty-tables--target-width 20) 630))
+      (setq-local pretty-tables--text-area 900)
+      (should (= (pretty-tables--target-width 20) 700)))))
 
-(ert-deftest pretty-tables-test-target-width-window ()
-  "The window target is the window less the prefix, at most the maximum."
-  (with-temp-buffer
-    (setq-local fill-column 70
-                pretty-tables-width 'window)
-    (dolist (case '((100 nil 0 100)    ; No upper bound.
-                    (100 90 0 90)      ; Upper bound.
-                    (60 90 0 60)       ; Window under the upper bound.
-                    (100 0 0 0)        ; An upper bound of 0.
-                    (100 nil 4 96)     ; A prefix takes window columns.
-                    (100 90 4 90)      ; The bound is of the table alone.
-                    (nil 90 4 70)))    ; No window: `fill-column'.
-      (setq-local pretty-tables--window-columns (nth 0 case)
-                  pretty-tables-max-width (nth 1 case))
-      (should (= (pretty-tables--target-width (nth 2 case)) (nth 3 case))))))
-
-(ert-deftest pretty-tables-test-window-width ()
-  "The window width is that of the narrowest window showing the buffer."
+(ert-deftest pretty-tables-test-text-area-width ()
+  "The text area is that of the narrowest window showing the buffer.
+On a terminal it is `window-max-chars-per-line' columns."
   (pretty-tables-tests--with-buffer "| a |\n"
-    (should-not (pretty-tables--window-width))
+    (should-not (pretty-tables--text-area-width))
     (save-window-excursion
       (delete-other-windows)
       (set-window-buffer nil (current-buffer))
-      (let ((full (pretty-tables--window-width)))
+      (let ((full (pretty-tables--text-area-width)))
         (should (= full (window-max-chars-per-line)))
         (set-window-buffer (split-window-right) (current-buffer))
-        (should (< (pretty-tables--window-width) full))))))
+        (should (< (pretty-tables--text-area-width) full))))))
 
 (ert-deftest pretty-tables-test-window-buffer-change ()
-  "A window that stops showing the buffer updates its window width."
+  "A window that stops showing the buffer updates its text area."
   (pretty-tables-tests--with-buffer "| a |\n"
     (should (memq #'pretty-tables--windows-changed
                   (default-value 'window-buffer-change-functions)))
@@ -835,63 +836,63 @@ is read, as they do when jit-lock fontifies a window in chunks."
         (set-window-buffer narrow buffer)
         (set-window-buffer wide buffer)
         (pretty-tables--windows-changed (selected-frame))
-        (should (= pretty-tables--window-columns
+        (should (= pretty-tables--text-area
                    (window-max-chars-per-line narrow)))
         (with-temp-buffer
           (set-window-buffer narrow (current-buffer))
           (pretty-tables--windows-changed (selected-frame))
-          (should (= (buffer-local-value 'pretty-tables--window-columns buffer)
+          (should (= (buffer-local-value 'pretty-tables--text-area buffer)
                      (window-max-chars-per-line wide))))))))
 
 (ert-deftest pretty-tables-test-window-size-redraws ()
-  "With `pretty-tables-width' at `window', a resize draws the table again.
+  "A narrower text area draws the table again.
 The window change marks the table for jit-lock, which draws it at the
-next redisplay."
-  (pretty-tables-tests--with-buffer
-      "Title\n\n| a | b |\n|---|---|\n| x | one two three four |\n"
-    (setq-local pretty-tables-width 'window
-                pretty-tables-min-column-width 1)
-    (pretty-tables-tests--with-window-width 80
-      (jit-lock-fontify-now)
-      (should (equal (car (last (pretty-tables-tests--rows)))
-                     "| x | one two three four |"))
-      (should-not (text-property-any (point-min) (point-max) 'fontified nil)))
-    (pretty-tables-tests--with-window-width 20
-      (should-not (text-property-not-all (point-min) (point-max)
-                                         'fontified nil))
-      (jit-lock-fontify-now)
-      (should (equal (car (last (pretty-tables-tests--rows)))
-                     "| x | one two      |\n|   | three four   |")))
-    ;; An unchanged width draws nothing again.
-    (pretty-tables-tests--with-window-width 20
-      (should-not (text-property-any (point-min) (point-max) 'fontified nil)))))
+next redisplay.  It does so with a width of its own too: the table is
+no wider than the text area."
+  (dolist (width '(text-area 80))
+    (pretty-tables-tests--with-buffer
+        "Title\n\n| a | b |\n|---|---|\n| x | one two three four |\n"
+      (setq-local pretty-tables-width width
+                  pretty-tables-min-column-width 1)
+      (pretty-tables-tests--with-text-area 80
+        (jit-lock-fontify-now)
+        (should (equal (car (last (pretty-tables-tests--rows)))
+                       "| x | one two three four |"))
+        (should-not (text-property-any (point-min) (point-max) 'fontified nil)))
+      (pretty-tables-tests--with-text-area 20
+        (should-not (text-property-not-all (point-min) (point-max)
+                                           'fontified nil))
+        (jit-lock-fontify-now)
+        (should (equal (car (last (pretty-tables-tests--rows)))
+                       "| x | one two      |\n|   | three four   |")))
+      ;; An unchanged width draws nothing again.
+      (pretty-tables-tests--with-text-area 20
+        (should-not (text-property-any (point-min) (point-max) 'fontified nil))))))
 
-(ert-deftest pretty-tables-test-window-width-prefix ()
-  "The indentation of a table takes window columns before the table."
+(ert-deftest pretty-tables-test-text-area-prefix ()
+  "The indentation of a table takes room in the text area."
   (pretty-tables-tests--with-buffer
       "Title\n\n  | a | b |\n  |---|---|\n  | x | one two three four |\n"
-    (setq-local pretty-tables-width 'window
+    (setq-local pretty-tables-width 'text-area
                 pretty-tables-min-column-width 1)
-    (pretty-tables-tests--with-window-width 22
+    (pretty-tables-tests--with-text-area 22
       (jit-lock-fontify-now)
       (should (equal (car (last (pretty-tables-tests--rows)))
                      "| x | one two      |\n|   | three four   |")))))
 
-(ert-deftest pretty-tables-test-window-width-floors ()
-  "No target width narrows a column below its floor, nor widens a table.
-The targets are the window width and `pretty-tables-max-width'."
+(ert-deftest pretty-tables-test-text-area-floors ()
+  "No width narrows a column below its floor, nor widens a table."
   (pretty-tables-tests--with-buffer
       "Title\n\n| a | b |\n|---|---|\n| x | one two three four |\n"
-    (setq-local pretty-tables-width 'window
-                pretty-tables-min-column-width 4)
-    (dolist (max '(10 0))
-      (setq-local pretty-tables-max-width max)
-      (pretty-tables-tests--with-window-width 80
+    (setq-local pretty-tables-min-column-width 4)
+    (dolist (width '(10 0))
+      (setq-local pretty-tables-width width)
+      (pretty-tables-tests--with-text-area 80
         (jit-lock-fontify-now)
         (should (equal (car (last (pretty-tables-tests--rows)))
                        "| x | one  |\n|   | two  |\n|   | thre |\n|   | e    |\n|   | four |"))))
-    (setq-local pretty-tables-max-width nil)
-    (pretty-tables-tests--with-window-width 80
+    (setq-local pretty-tables-width 'text-area)
+    (pretty-tables-tests--with-text-area 80
       (jit-lock-fontify-now)
       (should (equal (car (pretty-tables-tests--rows)) "| a | b                  |")))))
 

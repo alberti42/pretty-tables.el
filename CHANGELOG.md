@@ -14,7 +14,9 @@ to `X.Y.Z`.
 
 ### Added
 
-- The value `window` of `pretty-tables-width`: a table fits the narrowest window showing the buffer, less the table's indentation and `line-prefix`, and is drawn again when that width changes, for example when a window is resized or split or shows another buffer. The option `pretty-tables-max-width` (default nil, no bound) bounds the width from above. As with the other widths, no column is narrowed below its floor (its width cookie, `pretty-tables-min-column-width` or its widest image), so a table at its floors can be wider than the window or the maximum. In a buffer no window shows, the width is `fill-column`. The default of `pretty-tables-width` stays nil, `fill-column`.
+- A table is no wider than the text area of the narrowest window showing the buffer: the window without its margins and fringes, less the line numbers, less the column of the continuation glyph when the window has no fringes, and less the table's indentation and `line-prefix`. In a narrower window the columns are narrowed and their cells wrapped, where the rows used to be wider than the window. When that width changes, as when a window is resized or split or shows another buffer, the tables are drawn again. As with any width, no column is narrowed below its floor (its width cookie, `pretty-tables-min-column-width` or its widest image).
+- The value `text-area` of `pretty-tables-width`: a table takes the text area alone, with no width of its own. In a buffer no window shows, it means `fill-column`.
+- The value `fill-column` of `pretty-tables-width`, now its default; nil means the same.
 
 ### Changed
 

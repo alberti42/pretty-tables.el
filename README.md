@@ -25,7 +25,7 @@ A table is there to give an overview: the reader sees the rows and columns toget
 - With long lines wrapped, a row fills several screen lines, and nothing shows where one row ends and the next begins.
 - With long lines truncated, each row stays on one line and the window shows only its first columns: the reader scrolls sideways to read a row and never sees the whole table.
 
-The modes draw the table no wider than *pretty-tables-width* (by default *fill-column*). Each cell stays in its column and wraps inside it, hidden link markup takes no room, and data rows alternate their backgrounds, so each row can be told from the next. The buffer text is never modified, so the file stays a plain Markdown or Org table for every other tool.
+The modes draw the table no wider than *pretty-tables-width* (by default *fill-column*), and no wider than the text area of the window. Each cell stays in its column and wraps inside it, hidden link markup takes no room, and data rows alternate their backgrounds, so each row can be told from the next. The buffer text is never modified, so the file stays a plain Markdown or Org table for every other tool.
 
 Org writes each table row on one line too. *org-table-align* pads the cells in the buffer text, so a raw Org table is already aligned, but each row is as wide as its widest cells together. The gain in Org is the wrapping, and widths without the hidden part of the links.
 
@@ -120,8 +120,7 @@ The options below and the faces belong to *pretty-tables*, so they apply to both
 
 |Option                          |Default|Meaning                                                                      |
 |--------------------------------|-------|-----------------------------------------------------------------------------|
-|`pretty-tables-width`           |`nil`  |Maximum width, in columns, of a displayed table. When nil, use `fill-column`. On a graphical display a column is the width of the font of the adaptor's table face, such as `org-table`.|
-|`pretty-tables-max-width`       |`nil`  |Most width, in columns, of a table when `pretty-tables-width` is `window`. When nil, the table may be as wide as the window.|
+|`pretty-tables-width`           |`fill-column`|Maximum width, in columns, of a displayed table: `fill-column` (or `nil`), a number, or `text-area` for no width of its own. A table is never wider than the text area. On a graphical display a column is the width of the font of the adaptor's table face, such as `org-table`.|
 |`pretty-tables-min-column-width`|`8`    |Width below which a column is not narrowed to fit the table width.           |
 |`pretty-tables-stripe-rows`     |`t`    |Non-nil means data rows are drawn with alternating backgrounds.              |
 |`pretty-tables-row-lines`       |`nil`  |Non-nil means a line is drawn under each data row but the last.              |
@@ -131,7 +130,7 @@ The options below and the faces belong to *pretty-tables*, so they apply to both
 |`pretty-tables-image-spacing-factor`|`2`|Pixels of space per pixel an image reaches past the letters of the line. 0 means no space for any image; t means the most space for every image that reaches past the font, and none for one that fits within it; nil means the most space for every image.|
 |`pretty-tables-reveal`          |`writable`|When the row point is on is shown as its raw text: `always`, `writable` (in a buffer that is not read-only) or `nil` (never). During an Isearch it is shown whatever the value.|
 
-*pretty-tables-width* also takes the value `window`: a table then fits the narrowest window showing the buffer, less the table's indentation and `line-prefix`, at most *pretty-tables-max-width*, and is drawn again when the windows showing the buffer change. In a buffer no window shows, the width is *fill-column*.
+A table is also never wider than the text area of the narrowest window showing the buffer: the window without its margins and fringes, less the line numbers, less the column of the continuation glyph when the window has no fringes, and less the table's indentation and `line-prefix`. When that width changes, as when a window is resized or split or shows another buffer, the tables are drawn again. With *pretty-tables-width* set to `text-area`, a table takes the text area alone; in a buffer no window shows, that means *fill-column*.
 
 Each width option bounds how far the columns are narrowed, and none of them widens a table. No column is narrowed below its floor: its Org width cookie, else *pretty-tables-min-column-width*, and never below its widest image. A table whose columns are all at their floors can be wider than the width.
 

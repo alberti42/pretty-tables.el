@@ -72,29 +72,29 @@
   :group 'text
   :prefix "pretty-tables-")
 
-(defcustom pretty-tables-width nil
+(defcustom pretty-tables-width 'fill-column
   "Maximum width, in columns, of a displayed table.
-When nil, use `fill-column'.  When `window', use the width of the
-narrowest window showing the buffer, at most `pretty-tables-max-width',
-and draw the tables again when that width changes; in a buffer no
-window shows, use `fill-column'.  On a graphical display a column is
+`fill-column' means the value of `fill-column', and so does nil; a
+number means that many columns; `text-area' means no width of its own.
+In every case a table is no wider than the text area of the narrowest
+window showing the buffer: the window without its margins and fringes,
+less the line numbers, less the column of the continuation glyph when
+the window has no fringes, and less the table's indentation and
+`line-prefix'.  When that width changes, as when a window is resized
+or split, the tables are drawn again.  In a buffer no window shows,
+`text-area' means `fill-column'.  On a graphical display a column is
 the width of the font of the adaptor's table face, such as
 `org-table'.
 The width bounds how far columns are narrowed; no column is narrowed
 below its floor (see `pretty-tables--column-widths'), so a table whose
 columns are at their floors can be wider than this width, and a table
 narrower than it is not widened."
-  :type '(choice (const :tag "fill-column" nil)
-                 (const :tag "Window width" window)
-                 natnum)
-  :safe (lambda (value) (or (null value) (eq value 'window) (natnump value))))
-
-(defcustom pretty-tables-max-width nil
-  "Most width, in columns, of a table when `pretty-tables-width' is `window'.
-When nil, the table may be as wide as the window.  Like the window
-width, it narrows no column below its floor."
-  :type '(choice (const :tag "No bound" nil) natnum)
-  :safe (lambda (value) (or (null value) (natnump value))))
+  :type '(choice (const :tag "fill-column" fill-column)
+                 (const :tag "The text area" text-area)
+                 natnum
+                 (const :tag "fill-column (nil)" nil))
+  :safe (lambda (value) (or (memq value '(nil fill-column text-area))
+                            (natnump value))))
 
 (defcustom pretty-tables-min-column-width 8
   "Width below which a column is not narrowed to fit the table width."
@@ -561,30 +561,57 @@ no column is wider than its floor."
       (setf (nth best widths) (max (nth best floors)
                                    (- (nth best widths) (or step 1)))))))
 
-(defun pretty-tables--window-width ()
-  "Return the columns of the narrowest window showing the buffer, or nil."
+(defun pretty-tables--text-area-width ()
+  "Return the width of the narrowest text area showing the buffer, or nil.
+In pixels, which on a text terminal are columns.  The text area of a
+window is its body, `window-body-width', less the line numbers, and
+less one character of the `default' face for the continuation glyph
+unless a line can end in the right fringe, as `window-max-chars-per-line'
+counts it.  Nil when no window shows the buffer."
   (when-let* ((windows (get-buffer-window-list nil 'nomini t)))
-    (apply #'min (mapcar #'window-max-chars-per-line windows))))
+    (apply #'min
+           (mapcar (lambda (window)
+                     ;; `line-number-display-width' reads the selected
+                     ;; window.
+                     (with-selected-window window
+                       (let ((fringes (window-fringes window)))
+                         (- (window-body-width window t)
+                            (line-number-display-width t)
+                            (if (and (display-graphic-p)
+                                     ;; Not defined in an Emacs built
+                                     ;; without a window system.
+                                     (bound-and-true-p
+                                      overflow-newline-into-fringe)
+                                     (not (eq (car fringes) 0))
+                                     (not (eq (nth 1 fringes) 0)))
+                                0
+                              (window-font-width window))))))
+                   windows))))
 
-(defvar-local pretty-tables--window-columns nil
-  "The value of `pretty-tables--window-width' when the windows last changed.
+(defvar-local pretty-tables--text-area nil
+  "The value of `pretty-tables--text-area-width' when the windows last changed.
 Kept so that drawing a table, which runs during redisplay, reads no
 window.")
 
 (defun pretty-tables--target-width (prefix)
-  "Return the width a table is drawn to fit.
-PREFIX is the width of the widest prefix of its rows, which takes
-window columns before the table.  See `pretty-tables-width'."
-  (pcase pretty-tables-width
-    ('nil fill-column)
-    ('window
-     (if-let* ((width pretty-tables--window-columns))
-         (let ((width (- width prefix)))
-           (if pretty-tables-max-width
-               (min width pretty-tables-max-width)
-             width))
-       fill-column))
-    (width width)))
+  "Return the width a table is drawn to fit, in the unit of the layout.
+That is the width of `pretty-tables-width', but no more than the text
+area in `pretty-tables--text-area' less PREFIX, the width of the widest
+prefix of the table's rows, which takes room before the table.  The
+unit is the pixel when `pretty-tables--unit' is non-nil, else the
+column; the text area is in pixels, which on a text terminal, where
+the layout is in columns, are columns."
+  (let* ((unit (or pretty-tables--unit 1))
+         (own (pcase pretty-tables-width
+                ('text-area nil)
+                ((pred natnump) (* pretty-tables-width unit))
+                (_ (* fill-column unit))))
+         (area (and pretty-tables--text-area
+                    (- pretty-tables--text-area prefix))))
+    (cond ((and own area) (min own area))
+          (own)
+          (area)
+          (t (* fill-column unit)))))
 
 (defun pretty-tables--column-widths (natural target &optional minimums images
                                              overhead)
@@ -1127,9 +1154,16 @@ the space of `pretty-tables--add-spacing'."
                                (number-sequence 0 (1- ncols)))))
          (pretty-tables--line (pretty-tables--line-width ncols alignments))
          (widths (pretty-tables--column-widths
-                  natural (* (pretty-tables--target-width
-                              (apply #'max 0 (mapcar #'string-width prefixes)))
-                             unit)
+                  natural (pretty-tables--target-width
+                           (apply #'max 0
+                                  (mapcar (lambda (prefix)
+                                            (cond
+                                             ((string-empty-p prefix) 0)
+                                             (pretty-tables--unit
+                                              (string-pixel-width
+                                               prefix (current-buffer)))
+                                             (t (string-width prefix))))
+                                          (seq-uniq prefixes))))
                   (mapcar (lambda (m) (and m (* m unit)))
                           (plist-get table :min-widths))
                   images
@@ -1349,7 +1383,6 @@ runs there."
 (defconst pretty-tables--options
   '(fill-column
     pretty-tables-width
-    pretty-tables-max-width
     pretty-tables-min-column-width
     pretty-tables-stripe-rows
     pretty-tables-row-lines
@@ -1384,18 +1417,17 @@ at the next redisplay, when the new value is in place."
 (dolist (option pretty-tables--options)
   (add-variable-watcher option #'pretty-tables--option-changed))
 
-(defun pretty-tables--update-window-columns ()
-  "Update `pretty-tables--window-columns' of the current buffer.
-When it changes and `pretty-tables-width' is `window', draw the tables
-again."
-  (let ((width (pretty-tables--window-width)))
-    (unless (eql width pretty-tables--window-columns)
-      (setq pretty-tables--window-columns width)
-      (when (eq pretty-tables-width 'window)
-        (jit-lock-refontify)))))
+(defun pretty-tables--update-text-area ()
+  "Update `pretty-tables--text-area' of the current buffer.
+When it changes, draw the tables again: the text area bounds the width
+of every table, see `pretty-tables-width'."
+  (let ((width (pretty-tables--text-area-width)))
+    (unless (eql width pretty-tables--text-area)
+      (setq pretty-tables--text-area width)
+      (jit-lock-refontify))))
 
 (defun pretty-tables--windows-changed (_frame)
-  "Update `pretty-tables--window-columns' in every buffer an adaptor is on.
+  "Update `pretty-tables--text-area' in every buffer an adaptor is on.
 Runs from the default values of `window-size-change-functions' and
 `window-buffer-change-functions'.  Their buffer-local values would not
 run for a buffer when a window stops showing it, which can widen the
@@ -1403,7 +1435,7 @@ narrowest window that still does."
   (dolist (buffer (buffer-list))
     (when (buffer-local-value 'pretty-tables--adaptor buffer)
       (with-current-buffer buffer
-        (pretty-tables--update-window-columns)))))
+        (pretty-tables--update-text-area)))))
 
 (defun pretty-tables--redraw-all (&rest _)
   "Draw the tables of every buffer again.
@@ -1502,7 +1534,7 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (add-hook 'after-change-functions #'pretty-tables--note-change nil t)
   (add-hook 'window-size-change-functions #'pretty-tables--windows-changed)
   (add-hook 'window-buffer-change-functions #'pretty-tables--windows-changed)
-  (setq pretty-tables--window-columns (pretty-tables--window-width))
+  (setq pretty-tables--text-area (pretty-tables--text-area-width))
   ;; `add-variable-watcher' adds a function only once.  The watchers
   ;; of `pretty-tables--options' are added when the file loads.
   (dolist (option (plist-get adaptor :options))
@@ -1522,7 +1554,7 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (remove-hook 'before-change-functions #'pretty-tables--note-change t)
   (remove-hook 'after-change-functions #'pretty-tables--note-change t)
   (pretty-tables--delete-overlays (point-min) (point-max))
-  (setq pretty-tables--window-columns nil
+  (setq pretty-tables--text-area nil
         pretty-tables--revealed nil
         pretty-tables--edited nil
         pretty-tables--adaptor nil)

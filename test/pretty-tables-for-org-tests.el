@@ -146,13 +146,13 @@ Font-lock and `pretty-tables-for-org-mode' are on, the table width is
                      "|---+--------------|"
                      "| x | one two      |\n|   | three four   |")))))
 
-(ert-deftest pretty-tables-for-org-test-window-width ()
-  "With `pretty-tables-width' at `window', the table fits the window."
+(ert-deftest pretty-tables-for-org-test-text-area ()
+  "With `pretty-tables-width' at `text-area', the table fits the text area."
   (pretty-tables-for-org-tests--with-buffer
       "* Title\n\n| a | b |\n|---+---|\n| x | one two three four |\n"
-    (setq-local pretty-tables-width 'window
+    (setq-local pretty-tables-width 'text-area
                 pretty-tables-min-column-width 1)
-    (cl-letf (((symbol-function 'pretty-tables--window-width) (lambda () 20)))
+    (cl-letf (((symbol-function 'pretty-tables--text-area-width) (lambda () 20)))
       (pretty-tables--windows-changed (selected-frame)))
     (jit-lock-fontify-now)
     (should (equal (pretty-tables-for-org-tests--rows)
@@ -160,14 +160,14 @@ Font-lock and `pretty-tables-for-org-mode' are on, the table width is
                      "|---+--------------|"
                      "| x | one two      |\n|   | three four   |")))))
 
-(ert-deftest pretty-tables-for-org-test-window-width-cookies ()
-  "Width cookies under the minimum column width let a table fit the window.
+(ert-deftest pretty-tables-for-org-test-text-area-cookies ()
+  "Width cookies under the minimum column width let a table fit the text area.
 The minimum is `pretty-tables-min-column-width'."
   (pretty-tables-for-org-tests--with-buffer
       "* Title\n\n| <4> | <4> |\n| aaaa bbbb | cccc dddd |\n"
-    (setq-local pretty-tables-width 'window
+    (setq-local pretty-tables-width 'text-area
                 pretty-tables-min-column-width 8)
-    (cl-letf (((symbol-function 'pretty-tables--window-width) (lambda () 17)))
+    (cl-letf (((symbol-function 'pretty-tables--text-area-width) (lambda () 17)))
       (pretty-tables--windows-changed (selected-frame)))
     (jit-lock-fontify-now)
     (should (equal (pretty-tables-for-org-tests--rows)
