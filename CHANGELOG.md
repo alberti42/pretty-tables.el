@@ -12,6 +12,8 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-24
+
 ### Added
 
 - A table is no wider than the text area of the narrowest window showing the buffer: the window without its margins and fringes, less the line numbers, less the column of the continuation glyph when the window has no fringes, and less the table's indentation and `line-prefix`. In a narrower window the columns are narrowed and their cells wrapped, where the rows used to be wider than the window. When that width changes, as when a window is resized or split or shows another buffer, the tables are drawn again. As with any width, no column is narrowed below its floor (its width cookie, `pretty-tables-min-column-width` or its widest image).
@@ -238,7 +240,8 @@ to `X.Y.Z`.
   last, with the underline of the face `markdown-table-view-row-line`. It is
   off by default.
 
-[Unreleased]: https://github.com/alberti42/pretty-tables.el/compare/v0.6.0...main
+[Unreleased]: https://github.com/alberti42/pretty-tables.el/compare/v0.7.0...main
+[0.7.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.7.0
 [0.6.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.6.0
 [0.5.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.5.0
 [0.4.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.4.0
