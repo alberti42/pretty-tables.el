@@ -201,18 +201,17 @@ A configuration that hides link markup with `(space :width N)`, to keep raw tabl
 
 ## Writing an adaptor
 
-An adaptor draws the tables of another markup. It is a minor mode, defined with the macro *pretty-tables-define-mode*, which any package can call. This example defines the minor mode `my-markup-tables-mode`:
+To draw the tables of another major mode, such as another markup like reStructuredText or a buffer of your own package that shows tables, write an adaptor: a minor mode that finds the tables of that major mode. Define it with the macro *pretty-tables-define-mode*. This defines the minor mode `pretty-tables-for-rst-mode`, for the tables of `rst-mode`:
 
 ```elisp
-(pretty-tables-define-mode my-markup-tables-mode
-  "Display the tables of my-markup with aligned, wrapped columns."
-  :interactive (my-markup-mode)
-  :tables #'my-markup-tables
-  :separator #'my-markup-draw-separator
-  :face 'my-markup-table)
+(pretty-tables-define-mode pretty-tables-for-rst-mode
+  "Display reStructuredText tables with aligned, wrapped columns."
+  :interactive (rst-mode)
+  :tables #'pretty-tables-for-rst--tables
+  :separator #'pretty-tables-for-rst--draw-separator)
 ```
 
-The first argument is the name of the mode, the second its docstring. The keys:
+The first argument is the name of the mode, used as given, and the second its docstring. The functions `pretty-tables-for-rst--tables` and `pretty-tables-for-rst--draw-separator` are yours to write. The keys:
 
 - `:tables` (required): a function called with BEG and END that returns each table overlapping that region: the bounds of the table and of each row, the kind of each row (header, separator or data), the bounds of each cell, an alignment per column, and optionally a minimum width per column.
 - `:separator` (required): a function that returns the string drawing a separator row.
