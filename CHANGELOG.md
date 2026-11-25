@@ -26,11 +26,11 @@ to `X.Y.Z`.
 
 ### Added
 
-- The command `pretty-tables-redraw`: it draws the tables of the current buffer again, measuring its windows first, for a hook of a package that changes what the tables are drawn in, such as window margins, without running the window hooks. It ignores its arguments, so any hook can call it.
+- The command `pretty-tables-redraw` draws the tables of the current buffer again, after measuring the width of its windows. Call it from the hook of a package that changes the width the tables have, such as one that sets window margins, when the tables are not drawn again after that change. It ignores its arguments, so any hook can call it.
 
 ### Fixed
 
-- A table drawn to the text area was as wide as the window without its margins when a package set the margins from a window hook after the window changed, such as one that wraps lines at a column: the text area is measured again when the last window hooks of a redisplay run.
+- With a package that sets window margins after a window changes, such as one that wraps lines at a column, a table stayed as wide as the window without its margins. The width is now measured again after the other packages have run their window hooks.
 
 ## [0.7.0] - 2026-11-24
 
@@ -58,145 +58,73 @@ to `X.Y.Z`.
 
 ### Added
 
-- The option `pretty-tables-image-spacing` (default 0.5): the most space above and below an image in a cell, in units of the height of a line of text, split evenly above and below the image. An equation taller than a line of text no longer touches the rows above and below it. An image gets the space only as far as it reaches past the letters of the line, so one that fits in a line gets none: the option `pretty-tables-image-spacing-factor` (default 2) gives the pixels of space per pixel the image reaches past them; 0 gives no image space, t gives the most to every image that reaches past the letters, and nil gives every image the most. The space is a vertical `:margin` of the copy of the image that draws it, and the copy's `:ascent` keeps the image on the same baseline; an image that already has a `:margin` is left as it is.
+- An image taller than a line of text, such as an equation with a fraction, gets space above and below it, so it no longer touches the rows above and below. The option `pretty-tables-image-spacing` (default 0.5) sets the most space, in units of the height of a line of text, split evenly above and below the image. An image that fits within the letters of a line gets no space, so its row is no taller than a row of text. An image that reaches past them gets `pretty-tables-image-spacing-factor` (default 2) pixels of space per pixel it reaches past them, up to the most. With the factor 0 no image gets space; with t every image that reaches past the letters gets the most; with nil every image gets the most. An image that already has a `:margin` is left as it is.
 
 ### Fixed
 
-- The options of `pretty-tables` are watched from when the file loads, so after a new version is loaded in a running Emacs, setting an option it adds draws the tables again, also in buffers where a mode was already on.
+- After a new version of the package is loaded in a running Emacs, setting an option the new version adds draws the tables again, also in buffers where a mode was already on.
 
 ## [0.5.0] - 2026-11-07
 
 ### Added
 
-- The table property `:min-widths` of `pretty-tables-enable`: a list
-  with a width or nil per column.  When the table is wider than
-  `pretty-tables-width`, the columns with a width are narrowed first,
-  and none is narrowed below its width.
-- The adaptor key `:options` of `pretty-tables-enable`: a list of
-  variables the adaptor's tables depend on.  Setting one draws the
-  tables again, as setting `pretty-tables-width` does.
-- In an Org table wider than `pretty-tables-width`, the columns with a
-  `<N>`, `<lN>`, `<rN>` or `<cN>` cookie are narrowed first, and none is
-  narrowed below the width Org shows it at when the column is shrunk: N
-  characters and `org-table-shrunk-column-indicator`.  A table that fits
-  keeps the natural widths of its columns.  The option
-  `pretty-tables-for-org-width-cookies` (default t) turns this off.
-- An image shown by an overlay in a cell is drawn in the table when the
-  image spec gives its width in pixels as `:width`.  The image takes the
-  fewest columns that hold its `:width` times its `:scale`, and its column
-  is not narrowed below them.
-- The options `pretty-tables-width`, `pretty-tables-min-column-width`,
-  `pretty-tables-stripe-rows`, `pretty-tables-row-lines`,
-  `pretty-tables-reveal`, `pretty-tables-borders` and
-  `pretty-tables-separator-spacing` are safe as file-local and
-  directory-local variables when their value has the option's type.
-- The option `pretty-tables-borders`: `ascii` (the default) draws the
-  lines between the cells with `|`, `-` and `+`; `lines` draws lines
-  that join from one screen line to the next, in the face
-  `pretty-tables-border`.  On a graphical display a vertical line is
-  1 pixel wide and spans the whole height of each screen line.  A
-  separator row that follows a row other than a separator takes no
-  screen line: it is hidden, and the row before it is underlined on the
-  bottom pixel row of its last screen line.  On a text terminal the
-  lines are box-drawing characters.
-- The option `pretty-tables-separator-spacing` (default 0.25): with
-  `pretty-tables-borders` set to `lines`, the space between a row and
-  the line under it that replaces a separator row, in units of the
-  height of a line of text.
+- The option `pretty-tables-borders`: `ascii` (the default) draws the lines between the cells with `|`, `-` and `+`; `lines` draws lines that join from one screen line to the next, in the face `pretty-tables-border`. On a graphical display a vertical line is 1 pixel wide and runs the full height of each screen line. A separator row under a row other than a separator takes no screen line of its own: it is drawn as a line under that row. On a text terminal the lines are box-drawing characters.
+- The option `pretty-tables-separator-spacing` (default 0.25): with `lines` borders, the space between a row and the line under it, in units of the height of a line of text.
+- In an Org table wider than `pretty-tables-width`, the columns with a width cookie (`<N>`, `<lN>`, `<rN>` or `<cN>`) are narrowed first, and none is narrowed below the width Org shows it at when the column is shrunk: N characters and `org-table-shrunk-column-indicator`. A table that fits keeps the natural widths of its columns. The option `pretty-tables-for-org-width-cookies` (default t) turns this off.
+- An image in a cell, such as an equation preview, is drawn in the table when its image spec gives its width in pixels as `:width`. The image takes the fewest columns that hold its `:width` times its `:scale`, and its column is not narrowed below them.
+- The options `pretty-tables-width`, `pretty-tables-min-column-width`, `pretty-tables-stripe-rows`, `pretty-tables-row-lines`, `pretty-tables-reveal`, `pretty-tables-borders` and `pretty-tables-separator-spacing` can be set as file-local and directory-local variables without a prompt, when the value has the option's type.
+- For an adaptor: the table property `:min-widths` of `pretty-tables-enable`, a list with a width or nil per column. When the table is wider than `pretty-tables-width`, the columns with a width are narrowed first, and none is narrowed below its width.
+- For an adaptor: the key `:options` of `pretty-tables-enable`, a list of variables the adaptor's tables depend on. Setting one draws the tables again, as setting `pretty-tables-width` does.
 
 ### Changed
 
-- A drawn row is the `before-string` of its overlay, and a `display` of
-  `""` hides the row's text; the drawn row was the overlay's `display`.
-  Emacs ignores the `display` properties inside a string that is itself a
-  `display`, so an image in a cell showed as the text under it.
-- `pretty-tables-for-markdown-mode` is marked as a command of
-  `markdown-ts-mode`, and `pretty-tables-for-org-mode` as a command of
-  `org-mode`.  With `read-extended-command-predicate` set to
-  `command-completion-default-include-p`, `M-x` offers each only in
-  buffers whose major mode is that mode or derived from it.
+- An image in a cell is shown in the drawn row; before, the drawn row showed the text under the image.
+- With `read-extended-command-predicate` set to `command-completion-default-include-p`, `M-x` offers `pretty-tables-for-markdown-mode` only in `markdown-ts-mode` buffers and `pretty-tables-for-org-mode` only in `org-mode` buffers, or in buffers of a mode derived from them.
 
 ### Fixed
 
-- A newline in a `display` string in a cell, such as the one latex-to-svg
-  shows in the spaces around display math, is read as a space; it ended
-  the drawn row's screen line inside the cell.
-- An Org table is drawn again when a column is shrunk or expanded, for
-  example with `C-c TAB` (`org-table-toggle-column-width`), and after a
-  command such as `org-table-insert-column` edits a table with shrunk
-  columns. For this, `pretty-tables-for-org` advises `org-table-expand`
-  and `org-table--shrink-columns`.
+- A cell holding display math shown by latex-to-svg ended the drawn row's screen line in the middle of the cell. The newline that latex-to-svg shows in the spaces around display math is now read as a space.
+- An Org table is drawn again when a column is shrunk or expanded, for example with `C-c TAB` (`org-table-toggle-column-width`), and after a command such as `org-table-insert-column` edits a table with shrunk columns. For this, `pretty-tables-for-org` advises `org-table-expand` and `org-table--shrink-columns`.
 
 ## [0.4.0] - 2026-10-08
 
 ### Added
 
-- The adaptor key `:prefix` of `pretty-tables-enable`: a function called
-  with the start of a row that returns the `line-prefix` and
-  `wrap-prefix` of the string drawing it.
-- `pretty-tables-for-org-table`, which returns the Org table whose rows
-  start at the given positions, and `pretty-tables-for-org-draw-separator`,
-  for an adaptor of a buffer that shows Org tables outside `org-mode`.
+- For an adaptor: the key `:prefix` of `pretty-tables-enable`, a function called with the start of a row that returns the `line-prefix` and `wrap-prefix` of its drawing, which indent the screen lines of the row after the first.
+- For an adaptor of a buffer that shows Org tables outside `org-mode`: `pretty-tables-for-org-table`, which returns the Org table whose rows start at the given positions, and `pretty-tables-for-org-draw-separator`.
 
 ### Changed
 
-- In a read-only buffer, the row point is on stays drawn, except during
-  an Isearch. The new option `pretty-tables-reveal` sets when the row is
-  shown as its raw text: `always`, `writable` (the default: in a buffer
-  that is not read-only) or `nil` (never). During an Isearch it is shown
-  whatever the value.
+- In a read-only buffer, the row point is on stays drawn, except during an Isearch. The new option `pretty-tables-reveal` sets when that row is shown as its raw text: `always`, `writable` (the default: in a buffer that is not read-only) or nil (never). During an Isearch it is shown whatever the value.
 
 ### Fixed
 
-- Tables are drawn again after an option or the theme changes in a
-  buffer without font-lock keywords, where `font-lock-flush` does
-  nothing. The tables are now marked for drawing with
-  `jit-lock-refontify`.
+- In a buffer without font-lock keywords, such as the results buffer of org-semantic, the tables were not drawn again after an option or the theme changed.
 
 ## [0.3.0] - 2026-10-04
 
 ### Added
 
-- A table whose `#+ATTR_ORG` sets `:pretty-tables` to nil is not drawn
-  by `pretty-tables-for-org-mode`.
-- The table property `:raw` of `pretty-tables-enable`: a table whose
-  `:raw` is non-nil is not drawn, and its rows drawn before are shown as
-  text.
+- An Org table whose `#+ATTR_ORG` line sets `:pretty-tables` to nil is shown as its text, not drawn.
+- For an adaptor: the table property `:raw` of `pretty-tables-enable`. A table whose `:raw` is non-nil is shown as its text, and its rows drawn before are shown as text again.
 
 ### Fixed
 
-- `pretty-tables-for-org-mode` no longer loops forever when a table
-  extends past the accessible portion of a narrowed buffer. Tables are
-  now drawn with the buffer widened, as font-lock fontifies it.
-- In an indented table, the screen lines of a drawn row after the first
-  are indented as the first one. Each row string gets a `line-prefix` and
-  a `wrap-prefix`: the `line-prefix` of the line the row is on, followed by
-  the text from the start of that line to the row.
+- `pretty-tables-for-org-mode` hung Emacs when a table extended past the visible part of a narrowed buffer.
+- In an indented table, the screen lines of a wrapped row after the first are indented like the first.
 
 ## [0.2.0] - 2026-10-02
 
 ### Added
 
-- `pretty-tables`, the package that draws the tables. It defines no mode:
-  an adaptor for one markup finds the tables and calls
-  `pretty-tables-enable`. Its options and faces are `pretty-tables-width`,
-  `pretty-tables-min-column-width`, `pretty-tables-stripe-rows`,
-  `pretty-tables-row-lines`, `pretty-tables-row`, `pretty-tables-stripe`
-  and `pretty-tables-row-line`.
-- `pretty-tables-for-org-mode`, a buffer-local minor mode for `org-mode`
-  that draws Org tables as `pretty-tables-for-markdown-mode` draws Markdown
-  tables. A column is aligned as `org-table-align` aligns it, the hidden
-  part of a link takes no room, and clicking a link in a drawn row opens it
-  with `org-open-at-point`.
-- The face `pretty-tables-header`, added to the cell text of the header
-  rows of a drawn table. It is bold by default.
-- The face `pretty-tables-header-row`, added to the whole of each header
-  row, pipes included, for a background. It sets nothing by default.
+- `pretty-tables`, the package that draws the tables. It defines no mode: an adaptor for one markup finds the tables and calls `pretty-tables-enable`. Its options and faces are `pretty-tables-width`, `pretty-tables-min-column-width`, `pretty-tables-stripe-rows`, `pretty-tables-row-lines`, `pretty-tables-row`, `pretty-tables-stripe` and `pretty-tables-row-line`.
+- `pretty-tables-for-org-mode`, a buffer-local minor mode for `org-mode` that draws Org tables as `pretty-tables-for-markdown-mode` draws Markdown tables. A column is aligned as `org-table-align` aligns it, the hidden part of a link takes no room, and clicking a link in a drawn row opens it with `org-open-at-point`.
+- The face `pretty-tables-header`, added to the cell text of the header rows of a drawn table. It is bold by default.
+- The face `pretty-tables-header-row`, added to the whole of each header row, pipes included, for a background. It sets nothing by default.
 
 ### Changed
 
-- `markdown-table-view` is now `pretty-tables-for-markdown`, an adaptor that
-  requires `pretty-tables`. The names that changed, for users of 0.1.0:
+- `markdown-table-view` is now `pretty-tables-for-markdown`, an adaptor that requires `pretty-tables`. The names that changed, for users of 0.1.0:
 
   | 0.1.0 | Now |
   |---|---|
@@ -211,54 +139,27 @@ to `X.Y.Z`.
   | `markdown-table-view-row-map` | `pretty-tables-row-map` |
   | `markdown-table-view-mouse-follow` | `pretty-tables-mouse-follow` |
 
-  A configuration that requires `markdown-table-view` or turns on
-  `markdown-table-view-mode` has to use the new names.
-- `pretty-tables-row` and `pretty-tables-stripe` inherit no face. The table
-  face of the markup, `markdown-ts-table` for Markdown, is added to the row
-  after them.
-- Setting `fill-column` or one of the package's options draws the tables
-  again. Before, a table changed only when it was drawn again for another
-  reason, for example after `M-x font-lock-update`.
+  A configuration that requires `markdown-table-view` or turns on `markdown-table-view-mode` has to use the new names.
+- The faces `pretty-tables-row` and `pretty-tables-stripe` inherit no face. A drawn row also gets the table face of its markup, `markdown-ts-table` for Markdown, after them.
+- Setting `fill-column` or one of the package's options draws the tables again. Before, a table changed only when it was drawn again for another reason, for example after `M-x font-lock-update`.
 
 ### Fixed
 
-- Rows drawn with `markdown-table-view-stripe` were bold in themes that make
-  `lazy-highlight` bold, the `|` separators included, because the face
-  brought every attribute of `lazy-highlight`. A data row is now drawn with
-  its face and only the background of `hl-line` or `lazy-highlight`, read
-  when the table is drawn. A background set on the face itself takes their
-  place. The tables are drawn again when a theme is enabled or disabled.
-- The background of a data row that wraps over several screen lines ended a
-  few pixels further right on every screen line but the last. The newlines
-  between the screen lines no longer get the row's background.
-- `markdown-table-view-row` had no background until something loaded
-  `hl-line`, whose background it takes. The package now loads `hl-line`.
+- In themes that make `lazy-highlight` bold, the striped rows were bold, the `|` included, because the stripe face took every attribute of `lazy-highlight`. A data row now takes only the background of `hl-line` or `lazy-highlight`, and a background set on the row's face takes their place. The tables are drawn again when a theme is enabled or disabled.
+- The background of a data row that wraps over several screen lines ended a few pixels further right on every screen line but the last.
+- `markdown-table-view-row` had no background until something loaded `hl-line`, whose background it takes. The package now loads `hl-line`.
 
 ## [0.1.0] - 2026-10-01
 
 ### Added
 
-- `markdown-table-view-mode`, a buffer-local minor mode for `markdown-ts-mode`
-  that draws pipe tables with aligned columns. Column widths come from the
-  text a reader sees in each cell.
-- Tables wider than `markdown-table-view-width` are narrowed column by column,
-  down to `markdown-table-view-min-column-width`, and their cells are
-  word-wrapped. `<br>` in a cell starts a new line.
-- The row point is on is shown as its raw text. After a scroll command, a row
-  point moved onto stays drawn until the next command.
-- Clicking a character of a drawn row moves point to that character in the
-  buffer, and follows the link there if there is one.
-- Table cells are parsed with the `markdown-inline` grammar, so
-  `markdown-ts-mode` fontifies their links, emphasis and code and hides their
-  markup. The mode adds this rule only when `treesit-range-settings` does not
-  already run the grammar on table cells.
-- Data rows are drawn with alternating backgrounds: the faces
-  `markdown-table-view-row`, which inherits `hl-line`, and
-  `markdown-table-view-stripe`, which inherits `lazy-highlight`.
-  `markdown-table-view-stripe-rows` turns them off.
-- `markdown-table-view-row-lines` draws a line under each data row but the
-  last, with the underline of the face `markdown-table-view-row-line`. It is
-  off by default.
+- `markdown-table-view-mode`, a buffer-local minor mode for `markdown-ts-mode` that draws pipe tables with aligned columns. Column widths come from the text a reader sees in each cell.
+- Tables wider than `markdown-table-view-width` are narrowed column by column, down to `markdown-table-view-min-column-width`, and their cells are word-wrapped. `<br>` in a cell starts a new line.
+- The row point is on is shown as its raw text. After a scroll command, a row point moved onto stays drawn until the next command.
+- Clicking a character of a drawn row moves point to that character in the buffer, and follows the link there if there is one.
+- Links, emphasis and code in table cells are fontified and their markup hidden, as in a paragraph. The mode makes `markdown-ts-mode` parse table cells with the `markdown-inline` grammar, unless `markdown-ts-mode` already does.
+- Data rows are drawn with alternating backgrounds: the faces `markdown-table-view-row`, which inherits `hl-line`, and `markdown-table-view-stripe`, which inherits `lazy-highlight`. `markdown-table-view-stripe-rows` turns them off.
+- `markdown-table-view-row-lines` draws a line under each data row but the last, with the underline of the face `markdown-table-view-row-line`. It is off by default.
 
 [Unreleased]: https://github.com/alberti42/pretty-tables.el/compare/v0.7.1...main
 [0.7.1]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.7.1
