@@ -12,6 +12,10 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Changed
+
+- The data rows of the face `pretty-tables-row` have no background by default, so they show the buffer's, and those of `pretty-tables-stripe` take the background of `hl-line` instead of `lazy-highlight`. Themes give `lazy-highlight` a strong background for search matches, on which the cell text could be hard to read. A background set on either face still takes the place of the default.
+
 ## [0.7.1] - 2026-11-24
 
 ### Added

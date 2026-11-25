@@ -64,7 +64,7 @@
 (require 'image)
 (require 'jit-lock)
 (require 'subr-x)
-;; Defines the `hl-line' face, whose background `pretty-tables-row' takes.
+;; Defines the `hl-line' face, whose background `pretty-tables-stripe' takes.
 (require 'hl-line)
 
 (defgroup pretty-tables nil
@@ -191,17 +191,15 @@ seen."
 (defface pretty-tables-row
   '((t))
   "Face of the first, third, ... data rows of a drawn table.
-The row is drawn with this face and the background of `hl-line', so
-the theme sets the colour.  A background set on this face itself
-takes the place of the one of `hl-line'.  See
-`pretty-tables-stripe-rows'.")
+The row is drawn with this face, which has no background by default,
+so the row shows the buffer's.  See `pretty-tables-stripe-rows'.")
 
 (defface pretty-tables-stripe
   '((t))
   "Face of the second, fourth, ... data rows of a drawn table.
-The row is drawn with this face and the background of
-`lazy-highlight', so the theme sets the colour.  A background set on
-this face itself takes the place of the one of `lazy-highlight'.  See
+The row is drawn with this face and the background of `hl-line', so
+the theme sets the colour.  A background set on this face itself
+takes the place of the one of `hl-line'.  See
 `pretty-tables-stripe-rows'.")
 
 (defface pretty-tables-row-line
@@ -1013,15 +1011,15 @@ newline at POS."
   "Return the face of a data row: the stripe face if STRIPE is non-nil.
 The value is `(:inherit FACE :background COLOUR)', FACE being
 `pretty-tables-stripe' or `pretty-tables-row'.  COLOUR is the
-background set on FACE itself, or else the resolved background of
-`lazy-highlight' or `hl-line'.  Only the background of those two faces
-is taken: some themes make `lazy-highlight' bold, for example.  On a
-terminal without colours COLOUR is nil, and the value is FACE."
+background set on FACE itself, or else, for the stripe face, the
+resolved background of `hl-line'.  Only the background of `hl-line' is
+taken.  Without COLOUR, as for `pretty-tables-row' by default or on a
+terminal without colours, the value is FACE."
   (let* ((face (if stripe 'pretty-tables-stripe 'pretty-tables-row))
          (own (face-attribute face :background nil nil))
          (colour (if (stringp own)
                      own
-                   (face-background (if stripe 'lazy-highlight 'hl-line) nil t))))
+                   (and stripe (face-background 'hl-line nil t)))))
     (if colour
         (list :inherit face :background colour)
       face)))

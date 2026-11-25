@@ -942,17 +942,12 @@ no wider than the text area."
       (jit-lock-fontify-now)
       (should (equal (car (pretty-tables-tests--rows)) "| a | b                  |")))))
 
-;; Batch frames have no colours, so the faces whose background the data
-;; rows take get one for the tests.
-(defconst pretty-tables-tests--row-colour "#eeeeee"
+;; Batch frames have no colours, so the face whose background the stripe
+;; rows take gets one for the tests.
+(defconst pretty-tables-tests--stripe-colour "#c0cfe1"
   "Background given to `hl-line' in the tests.")
 
-(defconst pretty-tables-tests--stripe-colour "#c0cfe1"
-  "Background given to `lazy-highlight' in the tests.")
-
-(set-face-attribute 'hl-line nil :background pretty-tables-tests--row-colour)
-(set-face-attribute 'lazy-highlight nil
-                    :background pretty-tables-tests--stripe-colour)
+(set-face-attribute 'hl-line nil :background pretty-tables-tests--stripe-colour)
 
 (defun pretty-tables-tests--faces (string)
   "Return the faces anywhere in STRING, as one flat list."
@@ -968,10 +963,9 @@ no wider than the text area."
 (defun pretty-tables-tests--row-kind (faces)
   "Return `row' or `stripe' for the row face among FACES, or nil."
   (seq-some (lambda (face)
-              (and (consp face)
-                   (pcase (plist-get face :inherit)
-                     ('pretty-tables-row 'row)
-                     ('pretty-tables-stripe 'stripe))))
+              (pcase (if (consp face) (plist-get face :inherit) face)
+                ('pretty-tables-row 'row)
+                ('pretty-tables-stripe 'stripe)))
             faces))
 
 (ert-deftest pretty-tables-test-option-redraws ()
@@ -1089,27 +1083,24 @@ The pipes get it too; the newlines between screen lines do not."
       (should-not (funcall has (substring header newline (1+ newline)))))))
 
 (ert-deftest pretty-tables-test-row-face ()
-  "A row face inherits the package's face and takes only a background.
-The background is the one of `hl-line' or `lazy-highlight', whatever
-else the theme gives those faces; a background set on the package's
-face takes its place."
-  (let ((weight (face-attribute 'lazy-highlight :weight))
-        (foreground (face-attribute 'lazy-highlight :foreground)))
+  "The stripe face takes only the background of `hl-line'.
+The row face has no background; a background set on the package's
+face takes the place of the default."
+  (let ((weight (face-attribute 'hl-line :weight))
+        (foreground (face-attribute 'hl-line :foreground)))
     (unwind-protect
         (progn
-          (set-face-attribute 'lazy-highlight nil :weight 'bold :foreground "red")
+          (set-face-attribute 'hl-line nil :weight 'bold :foreground "red")
           (should (equal (pretty-tables--row-face t)
                          (list :inherit 'pretty-tables-stripe
                                :background pretty-tables-tests--stripe-colour)))
-          (should (equal (pretty-tables--row-face nil)
-                         (list :inherit 'pretty-tables-row
-                               :background pretty-tables-tests--row-colour)))
+          (should (eq (pretty-tables--row-face nil) 'pretty-tables-row))
           (should-not (eq (face-attribute 'pretty-tables-stripe :weight nil t)
                           'bold))
           (set-face-attribute 'pretty-tables-row nil :background "#123456")
           (should (equal (plist-get (pretty-tables--row-face nil) :background)
                          "#123456")))
-      (set-face-attribute 'lazy-highlight nil :weight weight :foreground foreground)
+      (set-face-attribute 'hl-line nil :weight weight :foreground foreground)
       (set-face-attribute 'pretty-tables-row nil :background 'unspecified))))
 
 (ert-deftest pretty-tables-test-theme-redraws ()
@@ -1120,12 +1111,12 @@ face takes its place."
           (set-face-attribute 'hl-line nil :background "#654321")
           (run-hook-with-args 'enable-theme-functions 'user)
           (jit-lock-fontify-now)
-          (should (member (list :inherit 'pretty-tables-row
+          (should (member (list :inherit 'pretty-tables-stripe
                                 :background "#654321")
                           (pretty-tables-tests--faces
-                           (nth 2 (pretty-tables-tests--row-strings))))))
+                           (nth 3 (pretty-tables-tests--row-strings))))))
       (set-face-attribute 'hl-line nil
-                          :background pretty-tables-tests--row-colour))))
+                          :background pretty-tables-tests--stripe-colour))))
 
 (ert-deftest pretty-tables-test-stripes-not-on-newlines ()
   "The newlines between the screen lines of a row get no row face."
@@ -1141,9 +1132,8 @@ face takes its place."
       (should-not (funcall kind newline)))))
 
 (ert-deftest pretty-tables-test-row-face-defined ()
-  "The faces whose background the rows take are defined once the package is."
-  (should (facep 'hl-line))
-  (should (facep 'lazy-highlight)))
+  "The face whose background the stripe rows take is defined once the package is."
+  (should (facep 'hl-line)))
 
 (ert-deftest pretty-tables-test-stripes-off ()
   "With `pretty-tables-stripe-rows' nil, no row gets a row face."
