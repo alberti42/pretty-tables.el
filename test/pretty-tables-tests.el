@@ -92,6 +92,18 @@
   (concat "|" (mapconcat (lambda (w) (concat (make-string (+ 2 w) ?-) "|"))
                          widths)))
 
+;; Defined with the macro the adaptors use; BODY records each call.
+(defvar pretty-tables-tests--calls nil
+  "What ran when `pretty-tables-tests-adaptor-mode' changed, last first.")
+
+(pretty-tables-define-mode pretty-tables-tests-adaptor-mode
+  "The test adaptor as a minor mode."
+  :tables #'pretty-tables-tests--tables
+  :separator #'pretty-tables-tests--separator
+  :line-break "<br>"
+  (push (list 'body pretty-tables-tests-adaptor-mode (pretty-tables-active-p))
+        pretty-tables-tests--calls))
+
 (defmacro pretty-tables-tests--with-buffer (text &rest body)
   "Run BODY in a `pretty-tables-tests-mode' buffer holding TEXT.
 Font-lock and the test adaptor are on, the table width is 80, and
@@ -201,6 +213,45 @@ End.
 (defconst pretty-tables-tests--four-rows
   "Title\n\n| a | b |\n|---|---|\n| r0 | x |\n| r1 | y |\n| r2 | z<br>w |\n| r3 | v |\n"
   "A table with four data rows; the third is two screen lines tall.")
+
+;;; Adaptor modes
+
+(ert-deftest pretty-tables-test-define-mode ()
+  "A mode defined with `pretty-tables-define-mode' draws the tables.
+Its body runs before the drawing is turned on or off, then
+`pretty-tables-toggle-hook', then the mode's own hook."
+  (let ((buf (generate-new-buffer "pretty-tables-test"))
+        (pretty-tables-tests--calls nil)
+        (record (lambda (name)
+                  (lambda ()
+                    (push (list name pretty-tables-tests-adaptor-mode
+                                (pretty-tables-active-p))
+                          pretty-tables-tests--calls)))))
+    (unwind-protect
+        (with-current-buffer buf
+          (insert pretty-tables-tests--four-rows)
+          (pretty-tables-tests-mode)
+          (let ((noninteractive nil))
+            (font-lock-mode 1))
+          (add-hook 'pretty-tables-toggle-hook (funcall record 'toggle) nil t)
+          (add-hook 'pretty-tables-tests-adaptor-mode-hook
+                    (funcall record 'mode) nil t)
+          (should-not (pretty-tables-active-p))
+          (pretty-tables-tests-adaptor-mode 1)
+          (jit-lock-fontify-now)
+          (should (pretty-tables-active-p))
+          (should (pretty-tables-tests--rows))
+          (pretty-tables-tests-adaptor-mode -1)
+          (should-not (pretty-tables-active-p))
+          (should-not (pretty-tables-tests--rows))
+          (should (equal (reverse pretty-tables-tests--calls)
+                         '((body t nil) (toggle t t) (mode t t)
+                           (body nil t) (toggle nil nil) (mode nil nil)))))
+      (kill-buffer buf))))
+
+(ert-deftest pretty-tables-test-define-mode-lighter ()
+  "A mode defined with `pretty-tables-define-mode' has no lighter."
+  (should-not (cadr (assq 'pretty-tables-tests-adaptor-mode minor-mode-alist))))
 
 ;;; Layout
 

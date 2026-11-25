@@ -29,9 +29,11 @@
 ;; `pretty-tables' draws the tables of a buffer with aligned columns
 ;; and changes nothing else.  The buffer text is never modified.  It
 ;; defines no mode: an adaptor for one markup finds the tables and
-;; calls `pretty-tables-enable'.  `pretty-tables-for-markdown' is the
-;; adaptor for `markdown-ts-mode', `pretty-tables-for-org' the one for
-;; `org-mode'.
+;; defines its minor mode with `pretty-tables-define-mode'.
+;; `pretty-tables-for-markdown' is the adaptor for `markdown-ts-mode',
+;; `pretty-tables-for-org' the one for `org-mode'.  The hook
+;; `pretty-tables-toggle-hook' runs when the mode of any adaptor is
+;; turned on or off.
 ;;
 ;; Each table row is covered by an overlay whose `before-string' draws
 ;; the row with aligned columns, and whose `display' of "" hides the
@@ -233,6 +235,20 @@ fills the row.  It sets nothing by default.")
 (defvar-local pretty-tables--adaptor nil
   "The adaptor `pretty-tables-enable' was called with, or nil.
 A plist; non-nil means the tables of the buffer are drawn.")
+
+(defvar pretty-tables-toggle-hook nil
+  "Hook run when the mode of any adaptor is turned on or off.
+It works like a mode hook: its functions are called with no
+arguments, after the adaptor's mode has changed and before the
+adaptor's own mode hook.  The core defines no minor mode of its own;
+only the adaptors do, such as `pretty-tables-for-org-mode'.  A
+function tests `pretty-tables-active-p' to know whether a mode was
+turned on or off.")
+
+(defun pretty-tables-active-p ()
+  "Return non-nil when the tables of the current buffer are drawn.
+That is, when the mode of an adaptor is on in the buffer."
+  (and pretty-tables--adaptor t))
 
 (defvar-local pretty-tables--revealed nil
   "Row overlay currently shown as raw text, or nil.")
@@ -1480,7 +1496,9 @@ ignored, so any hook can call it."
 
 (defun pretty-tables-enable (&rest adaptor)
   "Draw the tables of the current buffer with aligned, wrapped columns.
-An adaptor calls this from its minor mode.  ADAPTOR is a plist:
+An adaptor calls this from its minor mode; a mode defined with
+`pretty-tables-define-mode' calls it with the keys given there.
+ADAPTOR is a plist:
 
 `:tables'     A function called with BEG and END that returns each
               table overlapping BEG to END, as described below.
@@ -1560,7 +1578,8 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (add-hook 'after-setting-font-hook #'pretty-tables--redraw-all)
   ;; Not `font-lock-flush', which does nothing in a buffer without
   ;; font-lock keywords; in a buffer with them, it calls this.
-  (jit-lock-refontify))
+  (jit-lock-refontify)
+  (run-hooks 'pretty-tables-toggle-hook))
 
 (defun pretty-tables-disable ()
   "Stop drawing the tables of the current buffer, and show their text."
@@ -1574,7 +1593,49 @@ cells, so it runs from `jit-lock-functions' after font-lock."
         pretty-tables--revealed nil
         pretty-tables--edited nil
         pretty-tables--adaptor nil)
-  (font-lock-flush))
+  (font-lock-flush)
+  (run-hooks 'pretty-tables-toggle-hook))
+
+(defconst pretty-tables--adaptor-keys
+  '(:tables :separator :line-break :face :invisible :follow :prefix
+    :options)
+  "The keys of the plist `pretty-tables-enable' takes.")
+
+(defmacro pretty-tables-define-mode (mode doc &rest body)
+  "Define MODE, the minor mode of an adaptor, with docstring DOC.
+BODY starts with keyword arguments.  The keys of `pretty-tables-enable'
+\(`:tables', `:separator', `:line-break', `:face', `:invisible',
+`:follow', `:prefix' and `:options') give the adaptor; their values
+are evaluated each time the mode is turned on.  The other keys, such
+as `:interactive', are passed to `define-minor-mode'; `:lighter' is
+nil unless given.
+
+The rest of BODY runs each time the mode is turned on or off, as the
+body of `define-minor-mode' does, before the mode calls
+`pretty-tables-enable' or `pretty-tables-disable'.  An adaptor puts
+there what it needs besides the drawing, testing MODE to know which
+way the mode went.
+
+The mode's own hook runs after `pretty-tables-toggle-hook'."
+  (declare (doc-string 2) (indent defun) (debug (&define name stringp
+                                                       [&rest keywordp sexp]
+                                                       def-body)))
+  (let (adaptor options)
+    (while (keywordp (car body))
+      (let ((key (pop body))
+            (value (pop body)))
+        (if (memq key pretty-tables--adaptor-keys)
+            (setq adaptor (nconc adaptor (list key value)))
+          (setq options (nconc options (list key value))))))
+    (unless (plist-member options :lighter)
+      (setq options (nconc options (list :lighter nil))))
+    `(define-minor-mode ,mode
+       ,doc
+       ,@options
+       ,@body
+       (if ,mode
+           (pretty-tables-enable ,@adaptor)
+         (pretty-tables-disable)))))
 
 (defun pretty-tables-unload-function ()
   "Remove the variable watchers and the hooks the file added.

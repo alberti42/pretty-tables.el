@@ -113,6 +113,14 @@ With *straight.el*, from a local clone, one recipe per package, *pretty-tables* 
 - After a scroll command, a row point moved onto stays drawn until the next command. A scroll command is one with a non-nil *scroll-command* property: *mwheel-scroll*, *pixel-scroll-precision*, *scroll-up-command*, *scroll-down-command* and the other scroll commands of Emacs.
 - Clicking a character of a drawn row moves point to that character in the buffer, and follows the link there if there is one. In Markdown the link is followed with the command RET runs there; in Org it is opened with *org-open-at-point*.
 - In Markdown, *markdown-ts-toggle-hide-markup* (`C-c C-x C-m`) shows and hides the markup; the tables are drawn again with the new widths.
+- *pretty-tables-toggle-hook* runs when either mode is turned on or off, before the mode's own hook, so settings common to both modes go there:
+
+  ```elisp
+  (add-hook 'pretty-tables-toggle-hook
+            (lambda ()
+              (when (pretty-tables-active-p)
+                (setq-local pretty-tables-width 'text-area))))
+  ```
 - *pretty-tables-redraw* draws the tables of the current buffer again, measuring its windows first. It is for a hook of a package that changes what the tables are drawn in, such as window margins, without running the window hooks; it ignores its arguments, so any hook can call it. The tables are drawn again by themselves when a window, a theme or the buffer's fonts change.
 
 ## Options
@@ -193,7 +201,18 @@ A configuration that hides link markup with `(space :width N)`, to keep raw tabl
 
 ## Writing an adaptor
 
-An adaptor for another markup calls *pretty-tables-enable* from its minor mode, with a function that returns, for a region of the buffer, each table that overlaps it: the bounds of the table and of each row, the kind of each row (header, separator or data), the bounds of each cell, an alignment per column, and optionally a minimum width per column. When the table is wider than *pretty-tables-width*, the columns with a width are narrowed first, and none is narrowed below its width. The docstring of *pretty-tables-enable* describes the data and the other keys. *pretty-tables-disable* turns the drawing off.
+An adaptor for another markup defines its minor mode with *pretty-tables-define-mode*, which can be called from any package:
+
+```elisp
+(pretty-tables-define-mode my-markup-tables-mode
+  "Display the tables of my-markup with aligned, wrapped columns."
+  :interactive (my-markup-mode)
+  :tables #'my-markup-tables
+  :separator #'my-markup-draw-separator
+  :face 'my-markup-table)
+```
+
+The keys of *pretty-tables-enable* give the adaptor; the other keys, such as `:interactive`, are passed to *define-minor-mode*. The body after the keys runs each time the mode is turned on or off, before the drawing is turned on or off. The mode calls *pretty-tables-enable* with a function that returns, for a region of the buffer, each table that overlaps it: the bounds of the table and of each row, the kind of each row (header, separator or data), the bounds of each cell, an alignment per column, and optionally a minimum width per column. When the table is wider than *pretty-tables-width*, the columns with a width are narrowed first, and none is narrowed below its width. The docstring of *pretty-tables-enable* describes the data and the other keys. *pretty-tables-disable* turns the drawing off.
 
 An adaptor of a buffer that shows Org tables outside *org-mode* can call *pretty-tables-for-org-table* with the position of the first `|` of each row, and pass *pretty-tables-for-org-draw-separator* as `:separator`.
 

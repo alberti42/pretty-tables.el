@@ -319,26 +319,22 @@ unfolding it does not draw it again."
 ;;; Mode
 
 ;;;###autoload
-(define-minor-mode pretty-tables-for-org-mode
+(pretty-tables-define-mode pretty-tables-for-org-mode
   "Display Org tables with aligned, wrapped columns.
 The buffer text is not changed.  The row point is on is shown as its
 raw text when `pretty-tables-reveal' says so, except after a scroll
 command moved point onto it."
-  :lighter nil
   :interactive (org-mode)
+  :tables #'pretty-tables-for-org--tables
+  :separator #'pretty-tables-for-org-draw-separator
+  :face 'org-table
+  :invisible #'pretty-tables-for-org--invisible-p
+  :follow #'org-open-at-point
   (if pretty-tables-for-org-mode
-      (progn
-        (add-hook 'jit-lock-after-change-extend-region-functions
-                  #'pretty-tables-for-org--extend-region nil t)
-        (pretty-tables-enable
-         :tables #'pretty-tables-for-org--tables
-         :separator #'pretty-tables-for-org-draw-separator
-         :face 'org-table
-         :invisible #'pretty-tables-for-org--invisible-p
-         :follow #'org-open-at-point))
+      (add-hook 'jit-lock-after-change-extend-region-functions
+                #'pretty-tables-for-org--extend-region nil t)
     (remove-hook 'jit-lock-after-change-extend-region-functions
-                 #'pretty-tables-for-org--extend-region t)
-    (pretty-tables-disable)))
+                 #'pretty-tables-for-org--extend-region t)))
 
 ;;; Shrunk columns
 

@@ -208,26 +208,19 @@ parsers made for the cells."
 ;;; Mode
 
 ;;;###autoload
-(define-minor-mode pretty-tables-for-markdown-mode
+(pretty-tables-define-mode pretty-tables-for-markdown-mode
   "Display Markdown pipe tables with aligned, wrapped columns.
 The buffer text is not changed.  The row point is on is shown as its
 raw text when `pretty-tables-reveal' says so, except after a scroll
 command moved point onto it.
 Table cells are parsed as inline Markdown, so their links, emphasis and
 code are fontified."
-  :lighter nil
   :interactive (markdown-ts-mode)
-  (cond
-   (pretty-tables-for-markdown-mode
-    (pretty-tables-for-markdown--parse-cells t)
-    (pretty-tables-enable
-     :tables #'pretty-tables-for-markdown--tables
-     :separator #'pretty-tables-for-markdown--draw-delimiter
-     :line-break "<br[ \t]*/?>"
-     :face 'markdown-ts-table))
-   (t
-    (pretty-tables-for-markdown--parse-cells nil)
-    (pretty-tables-disable))))
+  :tables #'pretty-tables-for-markdown--tables
+  :separator #'pretty-tables-for-markdown--draw-delimiter
+  :line-break "<br[ \t]*/?>"
+  :face 'markdown-ts-table
+  (pretty-tables-for-markdown--parse-cells pretty-tables-for-markdown-mode))
 
 (provide 'pretty-tables-for-markdown)
 ;;; pretty-tables-for-markdown.el ends here

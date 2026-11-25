@@ -12,6 +12,12 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- The hook `pretty-tables-toggle-hook`, run when the mode of any adaptor is turned on or off. It works like a mode hook, and runs before the adaptor's own mode hook, so settings common to both modes go on one hook.
+- The function `pretty-tables-active-p`, non-nil when the mode of an adaptor is on in the current buffer.
+- The macro `pretty-tables-define-mode`, which defines the minor mode of an adaptor from the keys of `pretty-tables-enable`. Both adaptors use it, and an adaptor in another package can too.
+
 ### Changed
 
 - The data rows of the face `pretty-tables-row` have no background by default, so they show the buffer's, and those of `pretty-tables-stripe` take the background of `hl-line` instead of `lazy-highlight`. Themes give `lazy-highlight` a strong background for search matches, on which the cell text could be hard to read. A background set on either face still takes the place of the default.
