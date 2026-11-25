@@ -36,19 +36,19 @@ to `X.Y.Z`.
 
 ### Added
 
-- A table is no wider than the text area of the narrowest window showing the buffer: the window without its margins and fringes, less the line numbers, less the column of the continuation glyph when the window has no fringes, and less the table's indentation and `line-prefix`. In a narrower window the columns are narrowed and their cells wrapped, where the rows used to be wider than the window. When that width changes, as when a window is resized or split or shows another buffer, the tables are drawn again. As with any width, no column is narrowed below its floor (its width cookie, `pretty-tables-min-column-width` or its widest image).
-- The value `text-area` of `pretty-tables-width`: a table takes the text area alone, with no width of its own. In a buffer no window shows, it means `fill-column`.
-- The value `fill-column` of `pretty-tables-width`, now its default; nil means the same.
+- A table is no wider than the window showing it. In a window narrower than the table, the columns are narrowed and their cells wrapped; before, the rows ran past the window's edge. The width leaves out the window's margins, fringes and line numbers, and the table's indentation; when several windows show the buffer, the narrowest counts. The tables are drawn again when a window is resized or split, or starts showing another buffer. A column is still not narrowed below its width cookie, `pretty-tables-min-column-width` or its widest image.
+- The value `text-area` of `pretty-tables-width`: tables take the whole width of the window, whatever `fill-column` is. In a buffer no window shows, it means `fill-column`.
+- The value `fill-column` of `pretty-tables-width`, now the default. nil, the old default, means the same.
 
 ### Changed
 
-- On a graphical display, tables are laid out in pixels: each cell is measured in the faces it is drawn with, so a character the table's font lacks, such as `★`, drawn in a wider fallback font, and a variable-pitch font no longer put the columns out of line. `pretty-tables-width` and `pretty-tables-min-column-width` are still in columns, a column being the width of the font of the table face (`markdown-ts-table`, `org-table`); with a fixed-pitch font, a table is drawn as before. With `ascii` borders, the `-` of a separator row can end up to one `-` short of the next `|` or `+`. On a text terminal, tables are laid out in columns.
-- An image in a cell is measured as it is displayed and takes its own width, no longer rounded up to whole columns; its spec needs no `:width`.
-- Drawing a table allocates less: the buffer position of each character of a cell, which a click reads, is kept by run of characters, not on each character. A table of 55 rows, byte-compiled, is drawn in 16 ms in pixels and 3.7 ms in columns, against 58 ms and 32 ms.
-- Typing in the row point is on no longer draws its table again at each change: the other rows keep their drawing until point leaves the row, and the table is then drawn with the widths of the new text. An edit that adds or deletes a newline, or changes another row, draws the table at once. While you type in the row, the adaptor is not asked for the tables either.
-- A drawn row holds fewer stretches: all the space between two pieces of text or two vertical lines is one stretch. A full redisplay of a window showing a table of 55 rows with `lines` borders took 16.7 ms and takes 11.6–13.3 ms; with the mode off it takes 9–10 ms.
-- A `space` display with a `:width` in a cell, such as one that hides link markup, keeps its width in a table laid out in pixels, where it was N spaces of the table's font.
-- The tables are drawn again after a command that changes the buffer's face remapping, such as `text-scale-adjust` or `buffer-face-mode`, and after the frame's font is set: a table laid out in pixels is measured in those fonts.
+- On a graphical display, each cell is measured in the fonts it is drawn with. The columns stay aligned with a variable-pitch font, and with a character the table's font lacks, such as `★`, which Emacs draws in a wider fallback font. With a fixed-pitch font, tables look as before. `pretty-tables-width` and `pretty-tables-min-column-width` still count characters of the table's font (`markdown-ts-table`, `org-table`). With `ascii` borders, the `-` of a separator row can stop up to one `-` short of the next `|` or `+`. On a text terminal, nothing changes.
+- An image in a cell takes its own width in pixels; before, its column was rounded up to whole characters. The image spec no longer needs a `:width`.
+- Tables are drawn in less time. With the package byte-compiled, a table of 55 rows is drawn in 16 ms on a graphical display, against 58 ms before, and in 3.7 ms on a text terminal, against 32 ms.
+- While you type in a row, the rest of its table keeps its drawing; when point leaves the row, the table is drawn again with the widths of the new text. An edit that adds or deletes a line, or changes another row, draws the table at once.
+- With `lines` borders, a window showing a table is redisplayed in less time: a full redisplay of a window showing a table of 55 rows took 16.7 ms and takes 11.6–13.3 ms. With the mode off, it takes 9–10 ms.
+- In a cell, link markup that a configuration hides as a space of a given width, `(space :width N)`, takes that width on a graphical display; before, it took N characters of the table's font.
+- The tables are drawn again after `text-scale-adjust`, `buffer-face-mode` or another command that changes the fonts of the buffer, and after the frame's font is set.
 
 ### Deprecated
 
