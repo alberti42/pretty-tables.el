@@ -201,7 +201,7 @@ A configuration that hides link markup with `(space :width N)`, to keep raw tabl
 
 ## Writing an adaptor
 
-An adaptor for another markup defines its minor mode with *pretty-tables-define-mode*, which can be called from any package:
+An adaptor draws the tables of another markup. It is a minor mode, defined with the macro *pretty-tables-define-mode*, which any package can call. This example defines the minor mode `my-markup-tables-mode`:
 
 ```elisp
 (pretty-tables-define-mode my-markup-tables-mode
@@ -212,7 +212,14 @@ An adaptor for another markup defines its minor mode with *pretty-tables-define-
   :face 'my-markup-table)
 ```
 
-The keys of *pretty-tables-enable* give the adaptor; the other keys, such as `:interactive`, are passed to *define-minor-mode*. The body after the keys runs each time the mode is turned on or off, before the drawing is turned on or off. The mode calls *pretty-tables-enable* with a function that returns, for a region of the buffer, each table that overlaps it: the bounds of the table and of each row, the kind of each row (header, separator or data), the bounds of each cell, an alignment per column, and optionally a minimum width per column. When the table is wider than *pretty-tables-width*, the columns with a width are narrowed first, and none is narrowed below its width. The docstring of *pretty-tables-enable* describes the data and the other keys. *pretty-tables-disable* turns the drawing off.
+The first argument is the name of the mode, the second its docstring. The keys:
+
+- `:tables` (required): a function called with BEG and END that returns each table overlapping that region: the bounds of the table and of each row, the kind of each row (header, separator or data), the bounds of each cell, an alignment per column, and optionally a minimum width per column.
+- `:separator` (required): a function that returns the string drawing a separator row.
+- `:face`, `:line-break`, `:invisible`, `:follow`, `:prefix`, `:options` (optional): described in the docstring of *pretty-tables-enable*, the function the mode calls when it is turned on. *pretty-tables-disable* is called when it is turned off.
+- Any other key, such as `:interactive`, is passed to *define-minor-mode*.
+
+Forms after the keys run each time the mode is turned on or off, before the tables are drawn or removed. The Org adaptor uses them to add and remove a hook of its own.
 
 An adaptor of a buffer that shows Org tables outside *org-mode* can call *pretty-tables-for-org-table* with the position of the first `|` of each row, and pass *pretty-tables-for-org-draw-separator* as `:separator`.
 
