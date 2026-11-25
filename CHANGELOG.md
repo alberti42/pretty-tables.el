@@ -44,9 +44,9 @@ to `X.Y.Z`.
 
 - On a graphical display, each cell is measured in the fonts it is drawn with. The columns stay aligned with a variable-pitch font, and with a character the table's font lacks, such as `★`, which Emacs draws in a wider fallback font. With a fixed-pitch font, tables look as before. `pretty-tables-width` and `pretty-tables-min-column-width` still count characters of the table's font (`markdown-ts-table`, `org-table`). With `ascii` borders, the `-` of a separator row can stop up to one `-` short of the next `|` or `+`. On a text terminal, nothing changes.
 - An image in a cell takes its own width in pixels; before, its column was rounded up to whole characters. The image spec no longer needs a `:width`.
-- Tables are drawn in less time. With the package byte-compiled, a table of 55 rows is drawn in 16 ms on a graphical display, against 58 ms before, and in 3.7 ms on a text terminal, against 32 ms.
+- Building the drawing of a table takes less time. With the package byte-compiled, the drawing of a table of 55 rows is built in 16 ms on a graphical display, against 58 ms before, and in 3.7 ms on a text terminal, against 32 ms.
 - While you type in a row, the rest of its table keeps its drawing; when point leaves the row, the table is drawn again with the widths of the new text. An edit that adds or deletes a line, or changes another row, draws the table at once.
-- With `lines` borders, a window showing a table is redisplayed in less time: a full redisplay of a window showing a table of 55 rows took 16.7 ms and takes 11.6–13.3 ms. With the mode off, it takes 9–10 ms.
+- With `lines` borders, Emacs redisplays a window showing a drawn table in less time: a full redisplay of a window showing a table of 55 rows took 16.7 ms and takes 11.6–13.3 ms. With the mode off, it takes 9–10 ms.
 - In a cell, link markup that a configuration hides as a space of a given width, `(space :width N)`, takes that width on a graphical display; before, it took N characters of the table's font.
 - The tables are drawn again after `text-scale-adjust`, `buffer-face-mode` or another command that changes the fonts of the buffer, and after the frame's font is set.
 
