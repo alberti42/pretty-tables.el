@@ -12,15 +12,17 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-25
+
 ### Added
 
-- The hook `pretty-tables-toggle-hook`, run when the mode of any adaptor is turned on or off. It works like a mode hook, and runs before the adaptor's own mode hook, so settings common to both modes go on one hook.
-- The function `pretty-tables-active-p`, non-nil when the mode of an adaptor is on in the current buffer.
-- The macro `pretty-tables-define-mode`, which defines the minor mode of an adaptor from the keys of `pretty-tables-enable`. Both adaptors use it, and an adaptor in another package can too.
+- `pretty-tables-toggle-hook`: runs when the Org or the Markdown mode is turned on or off, before that mode's own hook. Settings shared by both go there.
+- `pretty-tables-active-p`: non-nil when a pretty-tables mode is on in the current buffer.
+- `pretty-tables-define-mode`: a macro that defines an adaptor, a minor mode that draws the tables of another major mode. Both adaptors use it.
 
 ### Changed
 
-- The data rows of the face `pretty-tables-row` have no background by default, so they show the buffer's, and those of `pretty-tables-stripe` take the background of `hl-line` instead of `lazy-highlight`. Themes give `lazy-highlight` a strong background for search matches, on which the cell text could be hard to read. A background set on either face still takes the place of the default.
+- Striped rows take the background of `hl-line`, and the other rows keep the buffer's background. Before, the stripes took `lazy-highlight`, a search-match colour on which cell text could be hard to read.
 
 ## [0.7.1] - 2026-11-24
 
@@ -161,7 +163,8 @@ to `X.Y.Z`.
 - Data rows are drawn with alternating backgrounds: the faces `markdown-table-view-row`, which inherits `hl-line`, and `markdown-table-view-stripe`, which inherits `lazy-highlight`. `markdown-table-view-stripe-rows` turns them off.
 - `markdown-table-view-row-lines` draws a line under each data row but the last, with the underline of the face `markdown-table-view-row-line`. It is off by default.
 
-[Unreleased]: https://github.com/alberti42/pretty-tables.el/compare/v0.7.1...main
+[Unreleased]: https://github.com/alberti42/pretty-tables.el/compare/v0.8.0...main
+[0.8.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.8.0
 [0.7.1]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.7.1
 [0.7.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.7.0
 [0.6.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.6.0
