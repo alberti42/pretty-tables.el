@@ -207,7 +207,19 @@ parsers made for the cells."
 
 ;;; Mode
 
+;; An explicit `autoload' form: a cookie on the macro form would be copied
+;; into the autoloads file, which loads before `pretty-tables' defines
+;; the macro.
 ;;;###autoload
+(autoload 'pretty-tables-for-markdown-mode "pretty-tables-for-markdown"
+  "Display Markdown pipe tables with aligned, wrapped columns.
+The buffer text is not changed.  The row point is on is shown as its
+raw text when `pretty-tables-reveal' says so, except after a scroll
+command moved point onto it.
+Table cells are parsed as inline Markdown, so their links, emphasis and
+code are fontified."
+  '(markdown-ts-mode))
+
 (pretty-tables-define-mode pretty-tables-for-markdown-mode
   "Display Markdown pipe tables with aligned, wrapped columns.
 The buffer text is not changed.  The row point is on is shown as its
