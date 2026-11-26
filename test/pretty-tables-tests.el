@@ -1554,49 +1554,6 @@ of the new text.  A newline typed in the row draws the table at once."
       (should-not pretty-tables--edited)
       (should-not (memq (car (pretty-tables-tests--overlays)) ovs)))))
 
-(ert-deftest pretty-tables-test-reveal-read-only ()
-  "In a read-only buffer the row point is on stays drawn by default.
-A row revealed before the buffer became read-only is drawn again."
-  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
-    (let ((ovs (pretty-tables-tests--overlays))
-          (this-command 'next-line))
-      (pretty-tables-tests--goto-row 2)
-      (pretty-tables--reveal)
-      (should-not (overlay-get (nth 2 ovs) 'display))
-      (setq buffer-read-only t)
-      (pretty-tables--reveal)
-      (should (overlay-get (nth 2 ovs) 'display))
-      (pretty-tables-tests--goto-row 3)
-      (pretty-tables--reveal)
-      (should (overlay-get (nth 3 ovs) 'display))
-      (should-not pretty-tables--revealed))))
-
-(ert-deftest pretty-tables-test-reveal-always ()
-  "With `pretty-tables-reveal' `always', a read-only row is revealed."
-  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
-    (let ((ovs (pretty-tables-tests--overlays))
-          (this-command 'next-line)
-          (pretty-tables-reveal 'always))
-      (setq buffer-read-only t)
-      (pretty-tables-tests--goto-row 2)
-      (pretty-tables--reveal)
-      (should-not (overlay-get (nth 2 ovs) 'display)))))
-
-(ert-deftest pretty-tables-test-reveal-never ()
-  "With `pretty-tables-reveal' nil, no row is revealed, except in Isearch."
-  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
-    (let ((ovs (pretty-tables-tests--overlays))
-          (this-command 'next-line)
-          (pretty-tables-reveal nil))
-      (pretty-tables-tests--goto-row 2)
-      (pretty-tables--reveal)
-      (should (overlay-get (nth 2 ovs) 'display))
-      (let ((isearch-mode " Isearch"))
-        (pretty-tables--reveal))
-      (should-not (overlay-get (nth 2 ovs) 'display))
-      (pretty-tables--reveal)
-      (should (overlay-get (nth 2 ovs) 'display)))))
-
 (ert-deftest pretty-tables-test-string-index ()
   "The index of the character that shows a position, by runs of positions."
   (let ((string (concat "| "
@@ -1643,6 +1600,49 @@ back."
       (pretty-tables--reveal)
       (should-not (overlay-get (nth 2 ovs) 'display))
       (should-not disable-point-adjustment))))
+
+(ert-deftest pretty-tables-test-reveal-read-only ()
+  "In a read-only buffer the row point is on stays drawn by default.
+A row revealed before the buffer became read-only is drawn again."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should-not (overlay-get (nth 2 ovs) 'display))
+      (setq buffer-read-only t)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display))
+      (pretty-tables-tests--goto-row 3)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 3 ovs) 'display))
+      (should-not pretty-tables--revealed))))
+
+(ert-deftest pretty-tables-test-reveal-always ()
+  "With `pretty-tables-reveal' `always', a read-only row is revealed."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (pretty-tables-reveal 'always))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should-not (overlay-get (nth 2 ovs) 'display)))))
+
+(ert-deftest pretty-tables-test-reveal-never ()
+  "With `pretty-tables-reveal' nil, no row is revealed, except in Isearch."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (pretty-tables-reveal nil))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display))
+      (let ((isearch-mode " Isearch"))
+        (pretty-tables--reveal))
+      (should-not (overlay-get (nth 2 ovs) 'display))
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display)))))
 
 (ert-deftest pretty-tables-test-redraw-keeps-revealed ()
   "Drawing a table again leaves the revealed row raw.
