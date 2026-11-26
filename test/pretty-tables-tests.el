@@ -1597,6 +1597,53 @@ A row revealed before the buffer became read-only is drawn again."
       (pretty-tables--reveal)
       (should (overlay-get (nth 2 ovs) 'display)))))
 
+(ert-deftest pretty-tables-test-string-index ()
+  "The index of the character that shows a position, by runs of positions."
+  (let ((string (concat "| "
+                        (propertize "ab" 'pretty-tables-pos 10)
+                        " | "
+                        (propertize "x" 'pretty-tables-pos '(20))
+                        " |")))
+    (dolist (case '((5 . 0) (10 . 2) (11 . 3) (15 . 3) (20 . 7) (30 . 7)))
+      (should (= (pretty-tables--string-index string (car case))
+                 (cdr case))))))
+
+(ert-deftest pretty-tables-test-keep-point-on-drawn-row ()
+  "On a drawn row point stays put, and the cursor shows the text at point.
+Without `disable-point-adjustment', Emacs moves point out of the text
+the empty `display' string hides, to the line above when point moved
+back."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'backward-char)
+          (disable-point-adjustment nil))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (search-forward "Emacs")
+      (backward-char 3)
+      (let ((pos (point))
+            (string (overlay-get (nth 2 ovs) 'before-string)))
+        (pretty-tables--reveal)
+        (should (overlay-get (nth 2 ovs) 'display))
+        (should disable-point-adjustment)
+        (should (= (point) pos))
+        (let ((index (text-property-not-all 0 (length string)
+                                            'cursor nil string)))
+          (should (= (pretty-tables--position string index) pos))
+          (should (equal (substring-no-properties string index (1+ index))
+                         "a")))))))
+
+(ert-deftest pretty-tables-test-keep-point-not-on-revealed-row ()
+  "On the revealed row, Emacs adjusts point as it does in any text."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (disable-point-adjustment nil))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should-not (overlay-get (nth 2 ovs) 'display))
+      (should-not disable-point-adjustment))))
+
 (ert-deftest pretty-tables-test-redraw-keeps-revealed ()
   "Drawing a table again leaves the revealed row raw.
 `jit-lock-fontify-now' moves point to the start of the region, so the

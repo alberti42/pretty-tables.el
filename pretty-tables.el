@@ -1338,6 +1338,42 @@ asked for the tables."
   (seq-find (lambda (ov) (overlay-get ov 'pretty-tables))
             (overlays-in (pos-bol) (pos-eol))))
 
+(defun pretty-tables--string-index (string pos)
+  "Return the index of the character of STRING that shows position POS.
+That is the character whose buffer position, read as
+`pretty-tables--position' reads it, is the greatest one not after
+POS; 0 when there is none."
+  (let ((index 0) (length (length string)) best best-pos)
+    (while (< index length)
+      (let* ((next (next-single-property-change index 'pretty-tables-pos
+                                                string length))
+             (value (get-text-property index 'pretty-tables-pos string))
+             (first (if (consp value) (car value) value))
+             (shown (and first (<= first pos)
+                         (if (consp value)
+                             first
+                           (min pos (+ value (- next index 1)))))))
+        (when (and shown (or (null best-pos) (> shown best-pos)))
+          (setq best (+ index (- shown first))
+                best-pos shown))
+        (setq index next)))
+    (or best 0)))
+
+(defun pretty-tables--keep-point (ov)
+  "Leave point where the command put it on OV, a drawn row.
+Emacs moves point out of the text an empty `display' string hides,
+and when point moved back, to before the line of the row.  This sets
+`disable-point-adjustment', and puts the `cursor' property on the
+character of the drawn row that shows the text at point, for any
+position of the row."
+  (let* ((string (overlay-get ov 'before-string))
+         (index (pretty-tables--string-index string (point))))
+    (setq disable-point-adjustment t)
+    (remove-text-properties 0 (length string) '(cursor nil) string)
+    (put-text-property index (1+ index)
+                       'cursor (- (overlay-end ov) (overlay-start ov))
+                       string)))
+
 (defun pretty-tables--reveal ()
   "Show the row point is on as raw text, and draw the one point left.
 The row is shown as raw text when `pretty-tables-reveal' says so, or
@@ -1345,9 +1381,12 @@ during an Isearch.  After a command with a non-nil `scroll-command'
 property, a row point moved onto stays drawn.  When the buffer
 changed since the table of the row point left was drawn
 \(`pretty-tables--edited'), that row's line is fontified again, and
-`pretty-tables--fontify' draws its table with the new text."
-  (let ((ov (pretty-tables--row-overlay-at-point))
-        (old pretty-tables--revealed))
+`pretty-tables--fontify' draws its table with the new text.  On a
+drawn row, point stays where the command put it; see
+`pretty-tables--keep-point'."
+  (let* ((row (pretty-tables--row-overlay-at-point))
+         (ov row)
+         (old pretty-tables--revealed))
     (unless (or isearch-mode
                 (pcase pretty-tables-reveal
                   ('always t)
@@ -1367,7 +1406,12 @@ changed since the table of the row point left was drawn
         (pretty-tables--show-drawn old t)))
       (when ov
         (pretty-tables--show-drawn ov nil))
-      (setq pretty-tables--revealed ov))))
+      (setq pretty-tables--revealed ov))
+    (when (and row (not (eq row ov)) (overlay-buffer row)
+               (overlay-get row 'before-string)
+               (<= (overlay-start row) (point))
+               (< (point) (overlay-end row)))
+      (pretty-tables--keep-point row))))
 
 (defun pretty-tables--follow-link ()
   "Run the command RET runs at point.
