@@ -186,7 +186,8 @@ read-only, and nil never.  A function means when it returns non-nil;
 it is called with no arguments in the buffer after each command.
 During an Isearch the row point is on is shown as its raw text
 whatever the value, so a match in it can be seen, and a function
-value is not called."
+value is not called.  An error in the function is shown as a message
+and counts as nil."
   :type '(choice (const :tag "In every buffer" always)
                  (const :tag "In a buffer that is not read-only" writable)
                  (const :tag "Never" nil)
@@ -1355,7 +1356,14 @@ changed since the table of the row point left was drawn
                 (pcase pretty-tables-reveal
                   ('always t)
                   ('writable (not buffer-read-only))
-                  ((pred functionp) (funcall pretty-tables-reveal))))
+                  ((pred functionp)
+                   ;; An error would remove this function from
+                   ;; `post-command-hook'.
+                   (condition-case err
+                       (funcall pretty-tables-reveal)
+                     (error
+                      (message "Error in `pretty-tables-reveal': %S" err)
+                      nil)))))
       (setq ov nil))
     (when (and (symbolp this-command) (get this-command 'scroll-command)
                (not (eq ov old)))

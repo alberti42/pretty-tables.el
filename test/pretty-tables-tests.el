@@ -1625,6 +1625,18 @@ A row revealed before the buffer became read-only is drawn again."
       (pretty-tables--reveal)
       (should (overlay-get (nth 2 ovs) 'display)))))
 
+(ert-deftest pretty-tables-test-reveal-function-error ()
+  "An error in a function value counts as nil and does not escape.
+In `post-command-hook' it would remove the reveal function from the
+hook."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (pretty-tables-reveal (lambda () (error "Boom"))))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display)))))
+
 (ert-deftest pretty-tables-test-reveal-function-same-row ()
   "The row point stays on follows the value of a function value.
 A command that changes what the function returns without moving point,
