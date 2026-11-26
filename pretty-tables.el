@@ -185,7 +185,8 @@ image, also one that fits."
 read-only, and nil never.  A function means when it returns non-nil;
 it is called with no arguments in the buffer after each command.
 During an Isearch the row point is on is shown as its raw text
-whatever the value, so a match in it can be seen."
+whatever the value, so a match in it can be seen, and a function
+value is not called."
   :type '(choice (const :tag "In every buffer" always)
                  (const :tag "In a buffer that is not read-only" writable)
                  (const :tag "Never" nil)
