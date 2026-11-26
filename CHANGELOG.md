@@ -14,7 +14,7 @@ to `X.Y.Z`.
 
 ### Fixed
 
-- Loading the generated `pretty-tables-autoloads.el` no longer fails with "Symbol's function definition is void: pretty-tables-define-mode", which made package managers such as straight.el abort. `pretty-tables-for-org-mode` and `pretty-tables-for-markdown-mode` are autoloaded with an explicit `autoload` form, still as commands only in `org-mode` and `markdown-ts-mode` buffers.
+- Loading the generated `pretty-tables-autoloads.el` no longer fails with "Symbol's function definition is void: pretty-tables-define-mode", which made package managers such as straight.el abort. `pretty-tables-for-org-mode` and `pretty-tables-for-markdown-mode` are autoloaded by a plain `autoload` call in the autoloads file, still as commands only in `org-mode` and `markdown-ts-mode` buffers.
 
 ## [0.8.0] - 2026-11-25
 

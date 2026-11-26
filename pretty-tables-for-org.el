@@ -318,16 +318,11 @@ unfolding it does not draw it again."
 
 ;;; Mode
 
-;; An explicit `autoload' form: a cookie on the macro form would be copied
+;; The `autoload' form sits on the cookie line, so only the autoloads
+;; file gets it.  A cookie on the macro form would copy the macro call
 ;; into the autoloads file, which loads before `pretty-tables' defines
 ;; the macro.
-;;;###autoload
-(autoload 'pretty-tables-for-org-mode "pretty-tables-for-org"
-  "Display Org tables with aligned, wrapped columns.
-The buffer text is not changed.  The row point is on is shown as its
-raw text when `pretty-tables-reveal' says so, except after a scroll
-command moved point onto it."
-  '(org-mode))
+;;;###autoload (autoload 'pretty-tables-for-org-mode "pretty-tables-for-org" "Display Org tables with aligned, wrapped columns.\nThe buffer text is not changed.  The row point is on is shown as its\nraw text when `pretty-tables-reveal' says so, except after a scroll\ncommand moved point onto it." '(org-mode))
 
 (pretty-tables-define-mode pretty-tables-for-org-mode
   "Display Org tables with aligned, wrapped columns.
