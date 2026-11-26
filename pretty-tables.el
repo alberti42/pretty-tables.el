@@ -182,12 +182,16 @@ image, also one that fits."
 (defcustom pretty-tables-reveal 'writable
   "When the row point is on is shown as its raw text.
 `always' means in every buffer, `writable' in a buffer that is not
-read-only, and nil never.  During an Isearch the row point is on is
-shown as its raw text whatever the value, so a match in it can be
-seen."
+read-only, and nil never.  A function means when it returns non-nil;
+it is called with no arguments in the buffer after each command.
+During an Isearch the row point is on is shown as its raw text
+whatever the value, so a match in it can be seen, and a function
+value is not called.  An error in the function is shown as a message
+and counts as nil."
   :type '(choice (const :tag "In every buffer" always)
                  (const :tag "In a buffer that is not read-only" writable)
-                 (const :tag "Never" nil))
+                 (const :tag "Never" nil)
+                 (function :tag "When a function returns non-nil"))
   :safe (lambda (value) (memq value '(always writable nil))))
 
 (defface pretty-tables-row
@@ -1351,7 +1355,15 @@ changed since the table of the row point left was drawn
     (unless (or isearch-mode
                 (pcase pretty-tables-reveal
                   ('always t)
-                  ('writable (not buffer-read-only))))
+                  ('writable (not buffer-read-only))
+                  ((pred functionp)
+                   ;; An error would remove this function from
+                   ;; `post-command-hook'.
+                   (condition-case err
+                       (funcall pretty-tables-reveal)
+                     (error
+                      (message "Error in `pretty-tables-reveal': %S" err)
+                      nil)))))
       (setq ov nil))
     (when (and (symbolp this-command) (get this-command 'scroll-command)
                (not (eq ov old)))
@@ -1560,7 +1572,10 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   ;; font-lock, whose faces and invisibility it reads.
   (remove-hook 'jit-lock-functions #'pretty-tables--fontify t)
   (add-hook 'jit-lock-functions #'pretty-tables--fontify 90 t)
-  (add-hook 'post-command-hook #'pretty-tables--reveal nil t)
+  ;; Late, after the global functions too: a function value of
+  ;; `pretty-tables-reveal' can read a state one of them sets, as
+  ;; evil does when it returns to Insert state after C-o.
+  (add-hook 'post-command-hook #'pretty-tables--reveal 90 t)
   (setq pretty-tables--remapping (copy-tree face-remapping-alist))
   (add-hook 'post-command-hook #'pretty-tables--check-remapping nil t)
   (add-hook 'before-change-functions #'pretty-tables--note-change nil t)

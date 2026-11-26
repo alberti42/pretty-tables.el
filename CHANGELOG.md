@@ -12,6 +12,10 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- `pretty-tables-reveal` takes a function, called with no arguments in the buffer after each command; the row point is on is shown as its raw text when it returns non-nil. With evil, `#'evil-insert-state-p` shows it only in Insert state.
+
 ## [0.8.0] - 2026-11-25
 
 ### Added

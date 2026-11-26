@@ -108,7 +108,12 @@ With *straight.el*, from a local clone, one recipe per package, *pretty-tables* 
 
 `M-x pretty-tables-for-markdown-mode` or `M-x pretty-tables-for-org-mode` turns the mode on in the current buffer. Each is marked as a command of *markdown-ts-mode* or *org-mode*, so with *read-extended-command-predicate* set to *command-completion-default-include-p*, `M-x` offers it only in buffers of that mode or a mode derived from it. The hooks above turn it on in every *markdown-ts-mode* or *org-mode* buffer.
 
-- The row point is on is shown as its raw text, so it can be edited and its links followed. In a read-only buffer it stays drawn, except during an Isearch; *pretty-tables-reveal* changes that.
+- The row point is on is shown as its raw text, so it can be edited and its links followed. In a read-only buffer it stays drawn, except during an Isearch; *pretty-tables-reveal* changes that. Its value can be a function, called with no arguments in the buffer after each command: the row is shown as raw text when it returns non-nil. With *evil*, this shows the row as raw text only in Insert state:
+
+  ```elisp
+  (with-eval-after-load 'evil
+    (setopt pretty-tables-reveal #'evil-insert-state-p))
+  ```
 - While you type in that row, the other rows of the table keep their drawing; when point leaves the row, the table is drawn again with the widths of the new text. An edit that adds or deletes a newline, or changes another row, draws the table at once.
 - After a scroll command, a row point moved onto stays drawn until the next command. A scroll command is one with a non-nil *scroll-command* property: *mwheel-scroll*, *pixel-scroll-precision*, *scroll-up-command*, *scroll-down-command* and the other scroll commands of Emacs.
 - Clicking a character of a drawn row moves point to that character in the buffer, and follows the link there if there is one. In Markdown the link is followed with the command RET runs there; in Org it is opened with *org-open-at-point*.
@@ -137,7 +142,7 @@ The options below and the faces belong to *pretty-tables*, so they apply to both
 |`pretty-tables-separator-spacing`|`0.25`|Space between a row and the line of the separator row under it, in units of the height of a line of text. Used when `pretty-tables-borders` is `lines`.|
 |`pretty-tables-image-spacing`   |`0.5`  |Most space above and below an image in a cell of a drawn table, in units of the height of a line of text, split evenly above and below the image.|
 |`pretty-tables-image-spacing-factor`|`2`|Pixels of space per pixel an image reaches past the letters of the line. 0 means no space for any image; t means the most space for every image that reaches past the font, and none for one that fits within it; nil means the most space for every image.|
-|`pretty-tables-reveal`          |`writable`|When the row point is on is shown as its raw text: `always`, `writable` (in a buffer that is not read-only) or `nil` (never). During an Isearch it is shown whatever the value.|
+|`pretty-tables-reveal`          |`writable`|When the row point is on is shown as its raw text: `always`, `writable` (in a buffer that is not read-only), `nil` (never), or a function, called with no arguments in the buffer after each command (when it returns non-nil). During an Isearch it is shown whatever the value, and a function is not called.|
 
 A table is also never wider than the text area of the narrowest window showing the buffer: the window without its margins and fringes, less the line numbers, less the column of the continuation glyph when the window has no fringes, and less the table's indentation and `line-prefix`. When that width changes, as when a window is resized or split or shows another buffer, the tables are drawn again. With *pretty-tables-width* set to `text-area`, a table takes the text area alone; in a buffer no window shows, that means *fill-column*.
 
@@ -145,7 +150,7 @@ Each width option bounds how far the columns are narrowed, and none of them wide
 
 Setting *fill-column* (`C-x f`) or one of these options draws the tables again in the buffers where a mode is on.
 
-The options are safe as file-local and directory-local variables when their value has the option's type, so a file or a `.dir-locals.el` can set them without a prompt.
+The options are safe as file-local and directory-local variables when their value has the option's type, so a file or a `.dir-locals.el` can set them without a prompt. A function as *pretty-tables-reveal* is not safe, since it would run code from the file.
 
 The first, third, ... data rows are drawn with the face *pretty-tables-row*, which has no background by default, so the rows show the buffer's; the others with *pretty-tables-stripe* and the background of *hl-line*, the face *hl-line-mode* highlights the current line with. Only the background is taken from *hl-line*. The theme sets it, for a light theme and a dark one alike, and the tables are drawn again when a theme is enabled. They are drawn again after a command that changes the buffer's face remapping, such as `text-scale-adjust` or *buffer-face-mode*, and after the frame's font is set. A background set on *pretty-tables-row* or *pretty-tables-stripe* takes the place of the theme's. The line is the underline of the face *pretty-tables-row-line*, so it takes no screen line of its own; in a terminal it is an ordinary underline. Both faces are added after the faces of the cell text, so a link or a code span keeps its own colours. The table face of the markup, *markdown-ts-table* or *org-table*, is added after them.
 

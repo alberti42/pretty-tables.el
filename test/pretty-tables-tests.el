@@ -711,7 +711,9 @@ There `font-lock-fontified' is nil, and `font-lock-flush' does nothing."
                   (pretty-tables-image-spacing-factor yes nil)
                   (pretty-tables-image-spacing-factor -1 nil)
                   (pretty-tables-reveal always t) (pretty-tables-reveal writable t)
-                  (pretty-tables-reveal nil t) (pretty-tables-reveal yes nil)))
+                  (pretty-tables-reveal nil t) (pretty-tables-reveal yes nil)
+                  (pretty-tables-reveal ignore nil)
+                  (pretty-tables-reveal (lambda () t) nil)))
     (should (eq (and (safe-local-variable-p (nth 0 case) (nth 1 case)) t)
                 (nth 2 case)))))
 
@@ -1596,6 +1598,83 @@ A row revealed before the buffer became read-only is drawn again."
       (should-not (overlay-get (nth 2 ovs) 'display))
       (pretty-tables--reveal)
       (should (overlay-get (nth 2 ovs) 'display)))))
+
+(ert-deftest pretty-tables-test-reveal-function-non-nil ()
+  "A function value that returns non-nil reveals a read-only row."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (pretty-tables-reveal (lambda () t)))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should-not (overlay-get (nth 2 ovs) 'display)))))
+
+(ert-deftest pretty-tables-test-reveal-function-nil ()
+  "A function value that returns nil reveals no row, except in Isearch."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (pretty-tables-reveal #'ignore))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display))
+      (let ((isearch-mode " Isearch"))
+        (pretty-tables--reveal))
+      (should-not (overlay-get (nth 2 ovs) 'display))
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display)))))
+
+(ert-deftest pretty-tables-test-reveal-function-error ()
+  "An error in a function value counts as nil and does not escape.
+In `post-command-hook' it would remove the reveal function from the
+hook."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (pretty-tables-reveal (lambda () (error "Boom"))))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display)))))
+
+(ert-deftest pretty-tables-test-reveal-function-same-row ()
+  "The row point stays on follows the value of a function value.
+A command that changes what the function returns without moving point,
+as entering an editing state does, reveals or draws the row."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let* ((ovs (pretty-tables-tests--overlays))
+           (this-command 'next-line)
+           (raw nil)
+           (pretty-tables-reveal (lambda () raw)))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display))
+      (setq raw t)
+      (pretty-tables--reveal)
+      (should-not (overlay-get (nth 2 ovs) 'display))
+      (setq raw nil)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display)))))
+
+(ert-deftest pretty-tables-test-reveal-after-global-post-command ()
+  "The row is revealed after the global `post-command-hook' functions.
+A function value of `pretty-tables-reveal' can read a state one of them
+sets."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let* ((ovs (pretty-tables-tests--overlays))
+           (this-command 'next-line)
+           (raw nil)
+           (pretty-tables-reveal (lambda () raw))
+           (set-raw (lambda () (setq raw t))))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should (overlay-get (nth 2 ovs) 'display))
+      (unwind-protect
+          (progn
+            (add-hook 'post-command-hook set-raw)
+            (run-hooks 'post-command-hook))
+        (remove-hook 'post-command-hook set-raw))
+      (should-not (overlay-get (nth 2 ovs) 'display)))))
 
 (ert-deftest pretty-tables-test-redraw-keeps-revealed ()
   "Drawing a table again leaves the revealed row raw.
