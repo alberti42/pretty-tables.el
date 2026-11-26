@@ -210,7 +210,11 @@ parsers made for the cells."
 ;; The `autoload' form sits on the cookie line, so only the autoloads
 ;; file gets it.  A cookie on the macro form would copy the macro call
 ;; into the autoloads file, which loads before `pretty-tables' defines
-;; the macro.
+;; the macro.  `(autoload-macro expand)' on the macro does not help:
+;; to expand it, loaddefs-gen loads this file with `load-suffixes'
+;; bound to (".el") (bug#80180).  In a fresh Emacs that load fails on
+;; the first `require' of a compressed built-in library, and the call
+;; is copied all the same.
 ;;;###autoload (autoload 'pretty-tables-for-markdown-mode "pretty-tables-for-markdown" "Display Markdown pipe tables with aligned, wrapped columns.\nThe buffer text is not changed.  The row point is on is shown as its\nraw text when `pretty-tables-reveal' says so, except after a scroll\ncommand moved point onto it.\nTable cells are parsed as inline Markdown, so their links, emphasis and\ncode are fontified." '(markdown-ts-mode))
 
 (pretty-tables-define-mode pretty-tables-for-markdown-mode

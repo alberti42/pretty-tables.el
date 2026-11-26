@@ -321,7 +321,11 @@ unfolding it does not draw it again."
 ;; The `autoload' form sits on the cookie line, so only the autoloads
 ;; file gets it.  A cookie on the macro form would copy the macro call
 ;; into the autoloads file, which loads before `pretty-tables' defines
-;; the macro.
+;; the macro.  `(autoload-macro expand)' on the macro does not help:
+;; to expand it, loaddefs-gen loads this file with `load-suffixes'
+;; bound to (".el") (bug#80180).  In a fresh Emacs that load fails on
+;; the first `require' of a compressed built-in library, and the call
+;; is copied all the same.
 ;;;###autoload (autoload 'pretty-tables-for-org-mode "pretty-tables-for-org" "Display Org tables with aligned, wrapped columns.\nThe buffer text is not changed.  The row point is on is shown as its\nraw text when `pretty-tables-reveal' says so, except after a scroll\ncommand moved point onto it." '(org-mode))
 
 (pretty-tables-define-mode pretty-tables-for-org-mode
