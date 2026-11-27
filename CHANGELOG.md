@@ -12,6 +12,10 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- On a drawn row, point stays where a command puts it, and the cursor is on the drawn character that shows the text at point (on a row drawn over several screen lines, only on its last screen line). Before, Emacs moved point out of the drawn row's hidden text: a command that moved point back into it, such as `C-b` or evil's `k`, landed on the line above.
+
 ## [0.8.0] - 2026-11-25
 
 ### Added

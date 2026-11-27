@@ -1554,6 +1554,116 @@ of the new text.  A newline typed in the row draws the table at once."
       (should-not pretty-tables--edited)
       (should-not (memq (car (pretty-tables-tests--overlays)) ovs)))))
 
+(ert-deftest pretty-tables-test-string-index ()
+  "The index of the character that shows a position, by runs of positions."
+  (let ((string (concat "| "
+                        (propertize "ab" 'pretty-tables-pos 10)
+                        " | "
+                        (propertize "x" 'pretty-tables-pos '(20))
+                        " |")))
+    (dolist (case '((5 . 0) (10 . 2) (11 . 3) (15 . 3) (20 . 7) (30 . 7)))
+      (should (= (pretty-tables--string-index string (car case))
+                 (cdr case))))))
+
+(ert-deftest pretty-tables-test-keep-point-on-drawn-row ()
+  "On a drawn row point stays put, and the cursor shows the text at point.
+Without `disable-point-adjustment', Emacs moves point out of the text
+the empty `display' string hides, to the line above when point moved
+back."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'backward-char)
+          (disable-point-adjustment nil))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (search-forward "Emacs")
+      (backward-char 3)
+      (let ((pos (point))
+            (string (overlay-get (nth 2 ovs) 'before-string)))
+        (pretty-tables--reveal)
+        (should (overlay-get (nth 2 ovs) 'display))
+        (should disable-point-adjustment)
+        (should (= (point) pos))
+        (let ((index (text-property-not-all 0 (length string)
+                                            'cursor nil string)))
+          (should (= (pretty-tables--position string index) pos))
+          (should (equal (substring-no-properties string index (1+ index))
+                         "a")))))))
+
+(ert-deftest pretty-tables-test-keep-point-not-on-revealed-row ()
+  "On the revealed row, Emacs adjusts point as it does in any text."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (disable-point-adjustment nil))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should-not (overlay-get (nth 2 ovs) 'display))
+      (should-not disable-point-adjustment))))
+
+(defun pretty-tables-tests--cursor (string)
+  "Return the index and value of the `cursor' property in STRING."
+  (let ((index (text-property-not-all 0 (length string) 'cursor nil string)))
+    (and index (cons index (get-text-property index 'cursor string)))))
+
+(ert-deftest pretty-tables-test-keep-point-row-end ()
+  "At the end of a drawn row the cursor goes back to the row's start.
+There the cursor property of a character inside the row would still
+apply, and show the cursor where point last was."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let* ((ov (nth 2 (pretty-tables-tests--overlays)))
+           (string (overlay-get ov 'before-string))
+           (this-command 'forward-char)
+           (disable-point-adjustment nil))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (search-forward "one")
+      (pretty-tables--reveal)
+      (should (integerp (cdr (pretty-tables-tests--cursor string))))
+      (goto-char (overlay-end ov))
+      (setq disable-point-adjustment nil)
+      (pretty-tables--reveal)
+      (should-not pretty-tables--cursor)
+      (should-not disable-point-adjustment)
+      (should (equal (pretty-tables-tests--cursor string) '(0 . t))))))
+
+(ert-deftest pretty-tables-test-keep-point-redraw ()
+  "A new drawing of the row point is on shows the cursor at point too."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((this-command 'forward-char)
+          (disable-point-adjustment nil))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (search-forward "Emacs")
+      (backward-char 3)
+      (let ((pos (point))
+            (old (overlay-get (nth 2 (pretty-tables-tests--overlays))
+                              'before-string)))
+        (pretty-tables--reveal)
+        (jit-lock-refontify)
+        (jit-lock-fontify-now)
+        (let* ((string (overlay-get (nth 2 (pretty-tables-tests--overlays))
+                                    'before-string))
+               (cursor (pretty-tables-tests--cursor string)))
+          (should-not (eq string old))
+          (should (integerp (cdr cursor)))
+          (should (= (pretty-tables--position string (car cursor)) pos)))))))
+
+(ert-deftest pretty-tables-test-keep-point-hidden-separator ()
+  "On a hidden separator row Emacs moves point as usual.
+The row has no drawing to show the cursor on."
+  (let ((pretty-tables-borders 'lines))
+    (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+      (let ((sep (nth 1 (pretty-tables-tests--overlays)))
+            (this-command 'forward-char)
+            (disable-point-adjustment nil))
+        (setq buffer-read-only t)
+        (should (equal (overlay-get sep 'before-string) ""))
+        (goto-char (overlay-start sep))
+        (pretty-tables--reveal)
+        (should-not disable-point-adjustment)
+        (should-not pretty-tables--cursor)))))
+
 (ert-deftest pretty-tables-test-reveal-read-only ()
   "In a read-only buffer the row point is on stays drawn by default.
 A row revealed before the buffer became read-only is drawn again."
