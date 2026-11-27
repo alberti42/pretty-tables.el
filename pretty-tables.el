@@ -255,8 +255,16 @@ That is, when the mode of an adaptor is on in the buffer."
 
 (defvar-local pretty-tables--cursor nil
   "Position of point on a drawn row after the last command, or nil.
-`pretty-tables--put-cursor' shows the cursor there, also in a new
+`pretty-tables--split-row' shows the cursor there, also in a new
 drawing of the row.")
+
+(defvar-local pretty-tables--split nil
+  "The row drawn in two parts around point, or nil.
+A list (ROW POS STRING HEAD TAIL CUT): the row overlay ROW, the
+position POS the cursor is shown at, the drawing STRING the parts were
+cut from, the overlays HEAD, or nil, and TAIL that show them, and the
+index CUT in STRING where the drawing of TAIL starts.  See
+`pretty-tables--split-row'.")
 
 (defvar-local pretty-tables--edited nil
   "How the buffer changed since the table of the revealed row was drawn.
@@ -899,10 +907,12 @@ returned as it is."
                       (setq pos (+ pos c 3))))
                   widths counts)))))))
 
-(defun pretty-tables--pixel-line (texts widths alignments)
+(defun pretty-tables--pixel-line (texts widths alignments &optional starts)
   "Return one screen line of a row laid out in pixels.
 TEXTS has the text of each cell on that line, WIDTHS and ALIGNMENTS
-the width in pixels and the alignment of each column.  The pieces are
+the width in pixels and the alignment of each column, STARTS the
+positions of `pretty-tables--cell-props' for the first screen line of
+a row, nil for the others.  The pieces are
 those of `pretty-tables--draw-row' in columns: a vertical line, the
 space of `pretty-tables--unit' pixels on each side of a cell, the
 cell's text padded to its width.  All the space between two pieces of
@@ -912,19 +922,26 @@ window showing a table took about 10 microseconds per stretch.  A
 vertical line is the 1-pixel stretch of `pretty-tables--border', in a
 column of `pretty-tables--unit' pixels, with `pretty-tables-borders'
 `lines', and `|' centred in `pretty-tables--line' pixels with
-`ascii'."
+`ascii'.  The stretch after a vertical line and the stretch after a
+cell's text get the properties of the cell they pad, from
+`pretty-tables--cell-props'."
   (let* ((unit pretty-tables--unit)
          (lines (eq pretty-tables-borders 'lines))
          (bar (unless lines (pretty-tables--pixel-width "|")))
          (column (unless lines (or pretty-tables--line bar)))
          (gap 0)
+         ;; The text properties of the stretch being gathered in GAP.
+         (props nil)
          (parts nil)
          (space (lambda (pixels) (setq gap (+ gap (max 0 pixels)))))
          (emit (lambda (string)
                  (when (> gap 0)
-                   (push (pretty-tables--space gap) parts)
+                   (let ((stretch (pretty-tables--space gap)))
+                     (add-text-properties 0 1 props stretch)
+                     (push stretch parts))
                    (setq gap 0))
-                 (push string parts)))
+                 (when string
+                   (push string parts))))
          (vertical
           (lambda (edge)
             (if lines
@@ -953,22 +970,41 @@ column of `pretty-tables--unit' pixels, with `pretty-tables-borders'
                        ('right pad)
                        ('center (/ pad 2))
                        (_ 0))))
+          (setq props (pretty-tables--cell-props i (nth i starts)))
           (funcall space (+ unit left))
           (unless (string-empty-p text)
-            (funcall emit text))
+            (funcall emit (propertize text 'pretty-tables-cell i))
+            (setq props (pretty-tables--cell-props i nil)))
           (funcall space (+ (- pad left) unit))
           (funcall vertical (if (= i (1- n)) 'right nil)))))
-    (when (> gap 0)
-      (push (pretty-tables--space gap) parts))
+    (setq props nil)
+    (funcall emit nil)
     (apply #'concat (nreverse parts))))
 
-(defun pretty-tables--draw-row (cells widths alignments)
+(defun pretty-tables--cell-props (index start)
+  "Return the text properties of the padding of cell INDEX of a drawn row.
+`pretty-tables-cell' is INDEX on every character that draws the cell,
+its text and its padding, so a click on the padding finds the cell.
+START non-nil is the buffer position the cell's text starts after:
+the start of the row for the first cell, the column separator before
+it for the others.  Then the padding before the cell's text on the
+first screen line gets START in `pretty-tables-pos', so the cursor
+shows the text from START to the cell's first visible character, such
+as the separator and the space after it, in the cell's padding."
+  (if start
+      (list 'pretty-tables-cell index 'pretty-tables-pos (list start))
+    (list 'pretty-tables-cell index)))
+
+(defun pretty-tables--draw-row (cells widths alignments &optional starts)
   "Return the string drawing a row whose cells are CELLS.
 CELLS is a list of cells, each a list of paragraphs.  WIDTHS and
-ALIGNMENTS give each column's width and alignment.  In pixels each
-screen line is built by `pretty-tables--pixel-line'.  In columns the
-lines between the cells are those of `pretty-tables--border', and each
-cell has a space on each side."
+ALIGNMENTS give each column's width and alignment.  STARTS has for
+each cell the START of `pretty-tables--cell-props', or is nil.  In
+pixels each screen line is built by `pretty-tables--pixel-line'.  In
+columns the lines between the cells are those of
+`pretty-tables--border', and each cell has a space on each side,
+which with the cell's text gets the properties of
+`pretty-tables--cell-props'."
   (let* ((wrapped (seq-map-indexed
                    (lambda (width i)
                      (mapcan (lambda (p) (pretty-tables--wrap p width))
@@ -980,15 +1016,22 @@ cell has a space on each side."
       (push (if pretty-tables--unit
                 (pretty-tables--pixel-line
                  (mapcar (lambda (column) (nth k column)) wrapped)
-                 widths alignments)
+                 widths alignments (and (= k 0) starts))
               (concat (pretty-tables--border 'left)
                       (mapconcat
                        (lambda (i)
-                         (concat " "
-                                 (pretty-tables--pad
-                                  (or (nth k (nth i wrapped)) "")
-                                  (nth i widths) (nth i alignments))
-                                 " "))
+                         (let ((start (and (= k 0) (nth i starts))))
+                           (propertize
+                            (concat (if start
+                                        (apply #'propertize " "
+                                               (pretty-tables--cell-props
+                                                i start))
+                                      " ")
+                                    (pretty-tables--pad
+                                     (or (nth k (nth i wrapped)) "")
+                                     (nth i widths) (nth i alignments))
+                                    " ")
+                            'pretty-tables-cell i)))
                        (number-sequence 0 (1- (length widths)))
                        (pretty-tables--border nil))
                       (pretty-tables--border 'right)))
@@ -999,12 +1042,14 @@ cell has a space on each side."
 
 (defun pretty-tables--delete-overlays (beg end)
   "Delete the row overlays that overlap BEG to END.
-The overlays of `pretty-tables--add-spacing' go too.  The markers of
+The overlays of `pretty-tables--add-spacing' and
+`pretty-tables--split-row' go too.  The markers of
 their `pretty-tables-table' are set to point nowhere, so they no longer
 slow down editing."
   (dolist (ov (overlays-in beg end))
     (when (or (overlay-get ov 'pretty-tables)
-              (overlay-get ov 'pretty-tables-spacing))
+              (overlay-get ov 'pretty-tables-spacing)
+              (overlay-get ov 'pretty-tables-part))
       (when-let* ((bounds (overlay-get ov 'pretty-tables-table)))
         (set-marker (car bounds) nil)
         (set-marker (cdr bounds) nil))
@@ -1210,7 +1255,9 @@ the space of `pretty-tables--add-spacing'."
               (string (cond
                        (hide "")
                        ((not (eq kind 'separator))
-                        (pretty-tables--draw-row cells widths alignments))
+                        (pretty-tables--draw-row
+                         cells widths alignments
+                         (cons beg (mapcar #'cdr (butlast (plist-get row :cells))))))
                        ((eq pretty-tables-borders 'lines)
                         (pretty-tables--draw-rule widths))
                        (t (pretty-tables--separator widths alignments))))
@@ -1237,14 +1284,22 @@ the space of `pretty-tables--add-spacing'."
                                       'line-prefix prefix
                                       'wrap-prefix prefix)
                                 string)
-           (pretty-tables--put-cursor string beg end))
+           ;; Point at the start of a drawn row shows the cursor at the
+           ;; start of the string, not after it.
+           (put-text-property 0 1 'cursor t string))
          (overlay-put ov 'pretty-tables t)
          (overlay-put ov 'pretty-tables-table bounds)
          (overlay-put ov 'pretty-tables-string string)
          (overlay-put ov 'evaporate t)
-         (if (eql beg revealed)
-             (setq pretty-tables--revealed ov)
-           (pretty-tables--show-drawn ov t))))
+         (cond
+          ((eql beg revealed)
+           (setq pretty-tables--revealed ov))
+          (t
+           (pretty-tables--show-drawn ov t)
+           (when (and pretty-tables--cursor (not hide)
+                      (<= beg pretty-tables--cursor)
+                      (< pretty-tables--cursor (overlay-end ov)))
+             (pretty-tables--split-row ov pretty-tables--cursor))))))
      rows data hidden (append (cdr hidden) (list nil)) prefixes)))
 
 (defun pretty-tables--note-change (beg end &optional _length)
@@ -1362,20 +1417,71 @@ POS; 0 when there is none."
         (setq index next)))
     (or best 0)))
 
-(defun pretty-tables--put-cursor (string beg end)
-  "Put the `cursor' property on STRING, the drawing of the row BEG to END.
-When `pretty-tables--cursor' lies in the row, the property is on the
-character that shows the text there, for any position of the row;
-else it is on the first character, for point at BEG.  On a row drawn
-over several screen lines, Emacs shows the cursor on that character
-only when it is on the last of them."
-  (remove-text-properties 0 (length string) '(cursor nil) string)
-  (if (and pretty-tables--cursor
-           (<= beg pretty-tables--cursor)
-           (< pretty-tables--cursor end))
-      (let ((index (pretty-tables--string-index string pretty-tables--cursor)))
-        (put-text-property index (1+ index) 'cursor (- end beg) string))
-    (put-text-property 0 1 'cursor t string)))
+(defun pretty-tables--split-row (row pos)
+  "Draw ROW, a row overlay, with the cursor on the character showing POS.
+Emacs shows the cursor on a character of an overlay string only on a
+screen line whose buffer positions hold point, and each screen line of
+a `before-string' but its last starts and ends at the overlay's start.
+So the drawing is cut at the newline that ends the screen line before
+the one of that character, found by `pretty-tables--string-index'.  An
+overlay from the start of ROW to POS shows the part before the cut,
+and an overlay from POS to the end of ROW the part from the cut on,
+with the `cursor' property on that character.  The screen line of the
+character starts inside the second string, so it gets the string's
+`line-prefix'.  ROW shows nothing meanwhile.  The two parts replace
+the ones of the row split before, see `pretty-tables--unsplit'."
+  (pretty-tables--unsplit)
+  (let* ((string (overlay-get row 'pretty-tables-string))
+         (beg (overlay-start row))
+         (end (overlay-end row))
+         (index (pretty-tables--string-index string pos))
+         (cut (let ((i (1- index)))
+                (while (and (>= i 0) (/= (aref string i) ?\n))
+                  (setq i (1- i)))
+                (max i 0)))
+         (head (substring string 0 cut))
+         (tail (substring string cut))
+         (parts nil))
+    (remove-text-properties 0 (length head) '(cursor nil) head)
+    (remove-text-properties 0 (length tail) '(cursor nil) tail)
+    (put-text-property (- index cut) (1+ (- index cut)) 'cursor t tail)
+    (dolist (part (list (list beg pos head) (list pos end tail)))
+      (pcase-let ((`(,from ,to ,drawing) part))
+        (if (< from to)
+            (let ((ov (make-overlay from to nil t nil)))
+              (overlay-put ov 'pretty-tables-part t)
+              (overlay-put ov 'evaporate t)
+              (overlay-put ov 'display "")
+              (overlay-put ov 'before-string drawing)
+              (push ov parts))
+          (push nil parts))))
+    (pretty-tables--show-drawn row nil)
+    (setq pretty-tables--split
+          (list row pos string (cadr parts) (car parts) cut))))
+
+(defun pretty-tables--unsplit ()
+  "Delete the parts of `pretty-tables--split', and draw its row whole.
+The row is drawn whole unless it is the revealed row."
+  (when pretty-tables--split
+    (pcase-let ((`(,row ,_pos ,_string ,head ,tail ,_cut) pretty-tables--split))
+      (setq pretty-tables--split nil)
+      (when head (delete-overlay head))
+      (when tail (delete-overlay tail))
+      (when (and (overlay-buffer row)
+                 (not (eq row pretty-tables--revealed)))
+        (pretty-tables--show-drawn row t)))))
+
+(defun pretty-tables--place-cursor (row pos)
+  "Show the cursor at POS on ROW, a drawn row, or whole rows if POS is nil.
+ROW is split with `pretty-tables--split-row' unless it is split at POS
+already, from its current drawing."
+  (cond
+   ((null pos) (pretty-tables--unsplit))
+   ((not (pcase pretty-tables--split
+           (`(,split ,at ,string . ,_)
+            (and (eq split row) (eql at pos)
+                 (eq string (overlay-get row 'pretty-tables-string))))))
+    (pretty-tables--split-row row pos))))
 
 (defun pretty-tables--reveal ()
   "Show the row point is on as raw text, and draw the one point left.
@@ -1388,8 +1494,9 @@ changed since the table of the row point left was drawn
 On a drawn row, point stays where the command put it: Emacs would move
 it out of the text the empty `display' string hides, and when point
 moved back, to before the line of the row.  The cursor is on the
-character that shows the text at point; see
-`pretty-tables--put-cursor'.  A hidden separator row is left to Emacs."
+character that shows the text at point, on any screen line of the
+row; see `pretty-tables--split-row'.  A hidden separator row is left
+to Emacs."
   (let* ((row (pretty-tables--row-overlay-at-point))
          (ov row)
          (old pretty-tables--revealed))
@@ -1411,6 +1518,8 @@ character that shows the text at point; see
        ((and old (overlay-buffer old))
         (pretty-tables--show-drawn old t)))
       (when ov
+        (when (eq ov (car pretty-tables--split))
+          (pretty-tables--unsplit))
         (pretty-tables--show-drawn ov nil))
       (setq pretty-tables--revealed ov))
     (let ((drawn (and row (not (eq row ov)) (overlay-buffer row)
@@ -1420,11 +1529,9 @@ character that shows the text at point; see
                  (<= (overlay-start row) (point))
                  (< (point) (overlay-end row))
                  (point)))
-      (when drawn
-        (when pretty-tables--cursor
-          (setq disable-point-adjustment t))
-        (pretty-tables--put-cursor (overlay-get row 'pretty-tables-string)
-                                   (overlay-start row) (overlay-end row))))))
+      (when pretty-tables--cursor
+        (setq disable-point-adjustment t))
+      (pretty-tables--place-cursor row pretty-tables--cursor))))
 
 (defun pretty-tables--follow-link ()
   "Run the command RET runs at point.
@@ -1433,16 +1540,41 @@ The default `:follow' function of an adaptor."
     (when (commandp command)
       (call-interactively command))))
 
+(defun pretty-tables--click-position (string index)
+  "Return the buffer position for a click on character INDEX of STRING.
+STRING is the drawing of a row, or a part of it that
+`pretty-tables--split-row' cut.  The position is the one of the
+character itself, see `pretty-tables--position'.  On the padding of a
+cell, which has none, it is the one of the nearest character of the
+same cell before INDEX that has one: on the same screen line, or on
+one above it.  Nil when there is none."
+  (pcase pretty-tables--split
+    (`(,_row ,_pos ,whole ,_head ,tail ,cut)
+     (when (and tail (eq string (overlay-get tail 'before-string)))
+       (setq string whole
+             index (+ index cut)))))
+  (or (pretty-tables--position string index)
+      (when-let* ((cell (get-text-property index 'pretty-tables-cell string)))
+        (let (found)
+          (while (and (not found) (> index 0))
+            (setq index (1- index))
+            (when (eql (get-text-property index 'pretty-tables-cell string)
+                       cell)
+              (setq found (pretty-tables--position string index))))
+          found))))
+
 (defun pretty-tables-mouse-follow (event)
   "Move point to the buffer text under the drawn row clicked in EVENT.
-When that text has a `mouse-face', it is a link, and the adaptor's
-`:follow' function follows it; by default that runs the command RET
-runs there."
+A click on the padding of a cell moves point into that cell; see
+`pretty-tables--click-position'.  When that text has a `mouse-face',
+it is a link, and the adaptor's `:follow' function follows it; by
+default that runs the command RET runs there."
   (interactive "e")
   (let* ((posn (event-start event))
          (string (posn-string posn))
          (pos (or (and string
-                       (pretty-tables--position (car string) (cdr string)))
+                       (pretty-tables--click-position (car string)
+                                                      (cdr string)))
                   (posn-point posn))))
     (select-window (posn-window posn))
     (goto-char pos)
@@ -1647,6 +1779,8 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (remove-hook 'after-change-functions #'pretty-tables--note-change t)
   (pretty-tables--delete-overlays (point-min) (point-max))
   (setq pretty-tables--text-area nil
+        pretty-tables--split nil
+        pretty-tables--cursor nil
         pretty-tables--revealed nil
         pretty-tables--edited nil
         pretty-tables--adaptor nil)
