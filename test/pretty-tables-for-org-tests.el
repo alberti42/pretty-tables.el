@@ -26,6 +26,7 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'org-indent)
 (require 'pretty-tables-for-org)
 
 ;;; Helpers
@@ -159,6 +160,40 @@ Font-lock and `pretty-tables-for-org-mode' are on, the table width is
                    '("| a | b            |"
                      "|---+--------------|"
                      "| x | one two      |\n|   | three four   |")))))
+
+(ert-deftest pretty-tables-for-org-test-org-indent ()
+  "The table makes room for the prefix of `org-indent-mode' while it is on.
+`org-indent-mode' puts the `line-prefix' on the lines in idle time,
+after the table is drawn, and removes it when turned off."
+  (pretty-tables-for-org-tests--with-buffer
+      "* Title\n** Sub\n| a | b |\n|---+---|\n| x | one two three four five six |\n"
+    (setq-local pretty-tables-width 'text-area
+                pretty-tables-min-column-width 1)
+    (cl-letf (((symbol-function 'pretty-tables--text-area-width) (lambda () 30)))
+      (pretty-tables--windows-changed (selected-frame)))
+    (jit-lock-fontify-now)
+    (org-indent-mode 1)
+    (jit-lock-fontify-now)
+    (should-not (get-text-property (point-min) 'line-prefix))
+    (should (= (string-width (car (pretty-tables-for-org-tests--rows))) 30))
+    (org-indent-initialize-buffer (current-buffer) nil)
+    (should-not (memq (current-buffer) org-indent-agentized-buffers))
+    (jit-lock-fontify-now)
+    (let* ((ov (car (pretty-tables-for-org-tests--overlays)))
+           (prefix (get-text-property (overlay-start ov) 'line-prefix))
+           (string (overlay-get ov 'pretty-tables-string)))
+      (should (< 0 (length prefix)))
+      (should (equal (get-text-property 0 'line-prefix string) prefix))
+      (should (= (+ (string-width prefix)
+                    (string-width (car (pretty-tables-for-org-tests--rows))))
+                 30)))
+    (org-indent-mode -1)
+    (jit-lock-fontify-now)
+    (let ((ov (car (pretty-tables-for-org-tests--overlays))))
+      (should (equal (get-text-property 0 'line-prefix
+                                        (overlay-get ov 'pretty-tables-string))
+                     ""))
+      (should (= (string-width (car (pretty-tables-for-org-tests--rows))) 30)))))
 
 (ert-deftest pretty-tables-for-org-test-text-area-cookies ()
   "Width cookies under the minimum column width let a table fit the text area.

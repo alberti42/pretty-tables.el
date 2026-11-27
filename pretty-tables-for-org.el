@@ -371,15 +371,37 @@ advice of `org-table--shrink-columns'."
 (advice-add 'org-table--shrink-columns :after
             #'pretty-tables-for-org--columns-shrunk)
 
+;;; Indentation
+
+(defun pretty-tables-for-org--indent-changed (&optional buffer)
+  "Draw the tables of BUFFER again after `org-indent-mode' changed its prefixes.
+BUFFER defaults to the current buffer.  The `line-prefix' of a table's
+line takes room before the table and starts the screen lines of its
+wrapped rows.  Turning `org-indent-mode' off removes the prefixes at
+once and runs `org-indent-mode-hook'.  Turning it on puts them on the
+buffer in idle time, after the tables are drawn, and runs
+`org-indent-post-buffer-init-functions' once it is done."
+  (with-current-buffer (or buffer (current-buffer))
+    (when pretty-tables-for-org-mode
+      (jit-lock-refontify))))
+
+(add-hook 'org-indent-mode-hook #'pretty-tables-for-org--indent-changed)
+(add-hook 'org-indent-post-buffer-init-functions
+          #'pretty-tables-for-org--indent-changed)
+
 (defun pretty-tables-for-org-unload-function ()
-  "Remove the advices and the variable watcher the file added.
+  "Remove the advices, hook functions and variable watcher the file added.
 The advices are those of `org-table-expand' and
-`org-table--shrink-columns', the watcher that of
-`pretty-tables-for-org-width-cookies'.  Called by `unload-feature';
-nil means unloading continues."
+`org-table--shrink-columns', the hook functions those of
+`org-indent-mode-hook' and `org-indent-post-buffer-init-functions',
+the watcher that of `pretty-tables-for-org-width-cookies'.  Called by
+`unload-feature'; nil means unloading continues."
   (advice-remove 'org-table-expand #'pretty-tables-for-org--columns-expanded)
   (advice-remove 'org-table--shrink-columns
                  #'pretty-tables-for-org--columns-shrunk)
+  (remove-hook 'org-indent-mode-hook #'pretty-tables-for-org--indent-changed)
+  (remove-hook 'org-indent-post-buffer-init-functions
+               #'pretty-tables-for-org--indent-changed)
   (remove-variable-watcher 'pretty-tables-for-org-width-cookies
                            #'pretty-tables--option-changed)
   nil)
