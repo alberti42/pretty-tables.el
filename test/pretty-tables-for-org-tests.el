@@ -161,39 +161,70 @@ Font-lock and `pretty-tables-for-org-mode' are on, the table width is
                      "|---+--------------|"
                      "| x | one two      |\n|   | three four   |")))))
 
+(defmacro pretty-tables-for-org-tests--with-indent (&rest body)
+  "Run BODY in a buffer whose table is under a level-2 heading.
+The text area is 30 columns, and `org-indent-mode' is on and has not
+indented the buffer yet."
+  (declare (indent 0) (debug t))
+  `(cl-letf (((symbol-function 'pretty-tables--text-area-width)
+              (lambda () 30)))
+     (pretty-tables-for-org-tests--with-buffer
+         "* Title\n** Sub\n| a | b |\n|---+---|\n| x | one two three four five six |\nText\n"
+       (setq-local pretty-tables-width 'text-area
+                   pretty-tables-min-column-width 1)
+       (pretty-tables--windows-changed (selected-frame))
+       (jit-lock-fontify-now)
+       (org-indent-mode 1)
+       (jit-lock-fontify-now)
+       ,@body)))
+
+(defun pretty-tables-for-org-tests--check-prefix ()
+  "Check that the first row is drawn with its line's prefix, and fits.
+The prefix and the row together are as wide as the text area."
+  (jit-lock-fontify-now)
+  (let* ((ov (car (pretty-tables-for-org-tests--overlays)))
+         (prefix (or (get-text-property (overlay-start ov) 'line-prefix) ""))
+         (string (overlay-get ov 'pretty-tables-string)))
+    (should (equal (get-text-property 0 'line-prefix string) prefix))
+    (should (= (+ (string-width prefix)
+                  (string-width (car (pretty-tables-for-org-tests--rows))))
+               30))
+    prefix))
+
 (ert-deftest pretty-tables-for-org-test-org-indent ()
   "The table makes room for the prefix of `org-indent-mode' while it is on.
 `org-indent-mode' puts the `line-prefix' on the lines in idle time,
 after the table is drawn, and removes it when turned off."
-  (pretty-tables-for-org-tests--with-buffer
-      "* Title\n** Sub\n| a | b |\n|---+---|\n| x | one two three four five six |\n"
-    (setq-local pretty-tables-width 'text-area
-                pretty-tables-min-column-width 1)
-    (cl-letf (((symbol-function 'pretty-tables--text-area-width) (lambda () 30)))
-      (pretty-tables--windows-changed (selected-frame)))
-    (jit-lock-fontify-now)
-    (org-indent-mode 1)
-    (jit-lock-fontify-now)
-    (should-not (get-text-property (point-min) 'line-prefix))
-    (should (= (string-width (car (pretty-tables-for-org-tests--rows))) 30))
-    (org-indent-initialize-buffer (current-buffer) nil)
+  (pretty-tables-for-org-tests--with-indent
+    (should (equal (pretty-tables-for-org-tests--check-prefix) ""))
+    ;; The idle work stops at the line after the table, as on input,
+    ;; and the next run indents the rest.
+    (let ((lines 0))
+      (cl-letf (((symbol-function 'input-pending-p)
+                 (lambda (&rest _) (> (cl-incf lines) 5))))
+        (org-indent-initialize-buffer (current-buffer) 1)))
+    (should (memq (current-buffer) org-indent-agentized-buffers))
+    (org-indent-initialize-buffer (current-buffer) 1)
     (should-not (memq (current-buffer) org-indent-agentized-buffers))
-    (jit-lock-fontify-now)
-    (let* ((ov (car (pretty-tables-for-org-tests--overlays)))
-           (prefix (get-text-property (overlay-start ov) 'line-prefix))
-           (string (overlay-get ov 'pretty-tables-string)))
-      (should (< 0 (length prefix)))
-      (should (equal (get-text-property 0 'line-prefix string) prefix))
-      (should (= (+ (string-width prefix)
-                    (string-width (car (pretty-tables-for-org-tests--rows))))
-                 30)))
+    (should (< 0 (length (pretty-tables-for-org-tests--check-prefix))))
     (org-indent-mode -1)
-    (jit-lock-fontify-now)
-    (let ((ov (car (pretty-tables-for-org-tests--overlays))))
-      (should (equal (get-text-property 0 'line-prefix
-                                        (overlay-get ov 'pretty-tables-string))
-                     ""))
-      (should (= (string-width (car (pretty-tables-for-org-tests--rows))) 30)))))
+    (should (equal (pretty-tables-for-org-tests--check-prefix) ""))))
+
+(ert-deftest pretty-tables-for-org-test-org-indent-level ()
+  "The table makes room for the new prefix when its heading's level changes.
+`org-indent-mode' changes the `line-prefix' of the table's lines
+without a change to them."
+  (pretty-tables-for-org-tests--with-indent
+    (org-indent-initialize-buffer (current-buffer) nil)
+    (let ((old (pretty-tables-for-org-tests--check-prefix)))
+      (search-forward "** Sub")
+      (org-do-demote)
+      (let ((new (pretty-tables-for-org-tests--check-prefix)))
+        (should (< (string-width old) (string-width new))))
+      (org-do-promote)
+      (org-do-promote)
+      (should (< (string-width (pretty-tables-for-org-tests--check-prefix))
+                 (string-width old))))))
 
 (ert-deftest pretty-tables-for-org-test-text-area-cookies ()
   "Width cookies under the minimum column width let a table fit the text area.

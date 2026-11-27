@@ -14,7 +14,7 @@ to `X.Y.Z`.
 
 ### Fixed
 
-- With `org-indent-mode`, an Org table is drawn again once `org-indent-mode` has put its `line-prefix` on the lines, and again when it is turned off. Before, a table drawn before `org-indent-mode` had indented the buffer, as when a file is opened, took no room for the indentation: with soft wrap, each drawn row as wide as the text area spilled onto a second screen line, and the wrapped lines of a row were not indented.
+- With `org-indent-mode`, an Org table makes room for the indentation of its lines, and the wrapped lines of its rows are indented. Before, `org-indent-mode` indented the lines after the table was drawn: when a file was opened, or below a heading whose level changed. With soft wrap, each drawn row as wide as the text area spilled onto a second screen line.
 
 ## [0.8.0] - 2026-11-25
 
