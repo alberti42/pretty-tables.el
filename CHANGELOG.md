@@ -12,6 +12,10 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- With `org-indent-mode`, an Org table makes room for the indentation of its lines, and the wrapped lines of its rows are indented. Before, `org-indent-mode` indented the lines after the table was drawn: when a file was opened, or below a heading whose level changed. With soft wrap, each drawn row as wide as the text area spilled onto a second screen line.
+
 ## [0.8.0] - 2026-11-25
 
 ### Added

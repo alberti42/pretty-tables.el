@@ -331,10 +331,18 @@ command moved point onto it."
   :invisible #'pretty-tables-for-org--invisible-p
   :follow #'org-open-at-point
   (if pretty-tables-for-org-mode
-      (add-hook 'jit-lock-after-change-extend-region-functions
-                #'pretty-tables-for-org--extend-region nil t)
+      (progn
+        (add-hook 'jit-lock-after-change-extend-region-functions
+                  #'pretty-tables-for-org--extend-region nil t)
+        ;; See "Indentation" below.
+        (add-hook 'org-indent-post-buffer-init-functions
+                  #'pretty-tables-redraw nil t)
+        (add-hook 'org-indent-mode-hook #'pretty-tables-redraw nil t))
     (remove-hook 'jit-lock-after-change-extend-region-functions
-                 #'pretty-tables-for-org--extend-region t)))
+                 #'pretty-tables-for-org--extend-region t)
+    (remove-hook 'org-indent-post-buffer-init-functions
+                 #'pretty-tables-redraw t)
+    (remove-hook 'org-indent-mode-hook #'pretty-tables-redraw t)))
 
 ;;; Shrunk columns
 
@@ -371,15 +379,46 @@ advice of `org-table--shrink-columns'."
 (advice-add 'org-table--shrink-columns :after
             #'pretty-tables-for-org--columns-shrunk)
 
+;;; Indentation
+
+;; The `line-prefix' of a table's line takes room before the table and
+;; starts the screen lines of its wrapped rows.  `org-indent-mode' puts
+;; it on the lines with `with-silent-modifications', so no change hook
+;; or jit-lock sees it: in idle time after the mode is turned on, and
+;; on the lines below a heading whose level changes.  The advice draws
+;; again the rows whose prefix changed.  The idle work can leave
+;; `org-indent-add-properties' by `throw', which skips the advice, so
+;; the mode draws the tables again from
+;; `org-indent-post-buffer-init-functions' too, which runs once the
+;; buffer is indented.  Turning `org-indent-mode' off removes the
+;; prefixes, and the mode draws the tables again from
+;; `org-indent-mode-hook': `org-indent-mode' restarts font-lock, which
+;; draws them only when font-lock is on.
+
+(defun pretty-tables-for-org--prefixes-set (beg end &rest _)
+  "Draw again the rows from BEG to END whose prefix is not their drawing's.
+An `:after' advice of `org-indent-add-properties'."
+  (when pretty-tables-for-org-mode
+    (save-restriction
+      (widen)
+      (dolist (ov (overlays-in beg end))
+        (let ((string (overlay-get ov 'pretty-tables-string)))
+          (when (and string (not (string-empty-p string))
+                     (not (equal (get-text-property 0 'line-prefix string)
+                                 (pretty-tables--prefix (overlay-start ov)))))
+            (jit-lock-refontify (overlay-start ov) (overlay-end ov))))))))
+
+(advice-add 'org-indent-add-properties :after
+            #'pretty-tables-for-org--prefixes-set)
+
 (defun pretty-tables-for-org-unload-function ()
   "Remove the advices and the variable watcher the file added.
-The advices are those of `org-table-expand' and
-`org-table--shrink-columns', the watcher that of
-`pretty-tables-for-org-width-cookies'.  Called by `unload-feature';
-nil means unloading continues."
+Called by `unload-feature'; nil means unloading continues."
   (advice-remove 'org-table-expand #'pretty-tables-for-org--columns-expanded)
   (advice-remove 'org-table--shrink-columns
                  #'pretty-tables-for-org--columns-shrunk)
+  (advice-remove 'org-indent-add-properties
+                 #'pretty-tables-for-org--prefixes-set)
   (remove-variable-watcher 'pretty-tables-for-org-width-cookies
                            #'pretty-tables--option-changed)
   nil)
