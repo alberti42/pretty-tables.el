@@ -54,6 +54,13 @@ width is 80, and point is at the start of the buffer."
              ,@body)
          (kill-buffer buf)))))
 
+(defun pretty-tables-for-markdown-tests--drawn-p (ov)
+  "Return non-nil when the row overlay OV shows its drawing.
+The row shows it itself, or in the two parts of
+`pretty-tables--split-row' when point is on it."
+  (or (overlay-get ov 'display)
+      (eq ov (car pretty-tables--split))))
+
 (defun pretty-tables-for-markdown-tests--overlays ()
   "Return the row overlays in the buffer, in buffer order."
   (sort (seq-filter (lambda (ov) (overlay-get ov 'pretty-tables))
@@ -285,11 +292,11 @@ The rule has the form a fixed `markdown-ts-mode' would install."
           (this-command 'next-line))
       (goto-char (overlay-start (nth 2 ovs)))
       (pretty-tables--reveal)
-      (should-not (overlay-get (nth 2 ovs) 'display))
+      (should-not (pretty-tables-for-markdown-tests--drawn-p (nth 2 ovs)))
       (goto-char (overlay-start (nth 3 ovs)))
       (pretty-tables--reveal)
-      (should (overlay-get (nth 2 ovs) 'display))
-      (should-not (overlay-get (nth 3 ovs) 'display)))))
+      (should (pretty-tables-for-markdown-tests--drawn-p (nth 2 ovs)))
+      (should-not (pretty-tables-for-markdown-tests--drawn-p (nth 3 ovs))))))
 
 (provide 'pretty-tables-for-markdown-tests)
 ;;; pretty-tables-for-markdown-tests.el ends here

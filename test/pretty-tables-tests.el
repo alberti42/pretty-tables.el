@@ -177,6 +177,13 @@ Tables are laid out in pixels, measured with
               #'pretty-tables-tests--pixel-width))
      ,@body))
 
+(defun pretty-tables-tests--drawn-p (ov)
+  "Return non-nil when the row overlay OV shows its drawing.
+The row shows it itself, or in the two parts of
+`pretty-tables--split-row' when point is on it."
+  (or (overlay-get ov 'display)
+      (eq ov (car pretty-tables--split))))
+
 (defun pretty-tables-tests--overlays ()
   "Return the row overlays in the buffer, in buffer order."
   (sort (seq-filter (lambda (ov) (overlay-get ov 'pretty-tables))
@@ -575,7 +582,13 @@ A click reads it with `pretty-tables--position'."
                      (when-let* ((pos (pretty-tables--position row i)))
                        (unless (eq (aref row i) ?\s)
                          (setq count (1+ count)))
-                       (should (eq (char-after pos) (aref row i))))))
+                       ;; The padding before a cell's text has the
+                       ;; position of the separator before the cell.
+                       (should (eq (char-after pos)
+                                   (if (consp (get-text-property
+                                               i 'pretty-tables-pos row))
+                                       ?|
+                                     (aref row i)))))))
                  ;; Each of the 40 characters of the cells that are not
                  ;; spaces has a position.
                  (should (= count 40)))))))
@@ -1493,14 +1506,14 @@ vertical lines are where those of the other rows are."
   (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
     (let ((ovs (pretty-tables-tests--overlays))
           (this-command 'next-line))
-      (should (seq-every-p (lambda (ov) (overlay-get ov 'display)) ovs))
+      (should (seq-every-p #'pretty-tables-tests--drawn-p ovs))
       (pretty-tables-tests--goto-row 2)
       (pretty-tables--reveal)
-      (should-not (overlay-get (nth 2 ovs) 'display))
+      (should-not (pretty-tables-tests--drawn-p (nth 2 ovs)))
       (pretty-tables-tests--goto-row 3)
       (pretty-tables--reveal)
-      (should (overlay-get (nth 2 ovs) 'display))
-      (should-not (overlay-get (nth 3 ovs) 'display)))))
+      (should (pretty-tables-tests--drawn-p (nth 2 ovs)))
+      (should-not (pretty-tables-tests--drawn-p (nth 3 ovs))))))
 
 (ert-deftest pretty-tables-test-typing-in-revealed-row ()
   "Typing in the revealed row does not draw the table again.
@@ -1554,6 +1567,336 @@ of the new text.  A newline typed in the row draws the table at once."
       (should-not pretty-tables--edited)
       (should-not (memq (car (pretty-tables-tests--overlays)) ovs)))))
 
+(ert-deftest pretty-tables-test-string-index ()
+  "The index of the character that shows a position, by runs of positions."
+  (let ((string (concat "| "
+                        (propertize "ab" 'pretty-tables-pos 10)
+                        " | "
+                        (propertize "x" 'pretty-tables-pos '(20))
+                        " |")))
+    (dolist (case '((5 . 0) (10 . 2) (11 . 3) (15 . 3) (20 . 7) (30 . 7)))
+      (should (= (pretty-tables--string-index string (car case))
+                 (cdr case))))))
+
+(defun pretty-tables-tests--cursor (string)
+  "Return the index and value of the `cursor' property in STRING."
+  (let ((index (text-property-not-all 0 (length string) 'cursor nil string)))
+    (and index (cons index (get-text-property index 'cursor string)))))
+
+(defun pretty-tables-tests--split-cursor ()
+  "Return the index in the row's drawing of the cursor of the split row.
+Nil when no row is split.  The drawing is the row's
+`pretty-tables-string'; the index is the one of the character of the
+second part with the `cursor' property."
+  (pcase pretty-tables--split
+    (`(,_row ,_pos ,_string ,_head ,tail ,cut)
+     (when-let* ((cursor (pretty-tables-tests--cursor
+                          (overlay-get tail 'before-string))))
+       (should (eq (cdr cursor) t))
+       (+ cut (car cursor))))))
+
+(ert-deftest pretty-tables-test-keep-point-on-drawn-row ()
+  "On a drawn row point stays put, and the cursor shows the text at point.
+Without `disable-point-adjustment', Emacs moves point out of the text
+the empty `display' string hides, to the line above when point moved
+back."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'backward-char)
+          (disable-point-adjustment nil))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (search-forward "Emacs")
+      (backward-char 3)
+      (let ((pos (point))
+            (string (overlay-get (nth 2 ovs) 'pretty-tables-string)))
+        (pretty-tables--reveal)
+        (should (pretty-tables-tests--drawn-p (nth 2 ovs)))
+        (should disable-point-adjustment)
+        (should (= (point) pos))
+        (let ((index (pretty-tables-tests--split-cursor)))
+          (should (= (pretty-tables--position string index) pos))
+          (should (equal (substring-no-properties string index (1+ index))
+                         "a")))))))
+
+(ert-deftest pretty-tables-test-split-row-screen-lines ()
+  "On a row drawn over several screen lines, the cursor shows on each.
+The drawing is cut at the newline before the screen line of the
+character at point: the first part ends before that newline, from the
+start of the row to point, and the second starts with it, from point
+to the end of the row.  The row itself shows nothing meanwhile."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n| a | one two three four five six |\n| b | c |\n"
+    (setq-local pretty-tables-width 16)
+    (jit-lock-refontify)
+    (jit-lock-fontify-now)
+    (let* ((ov (car (pretty-tables-tests--overlays)))
+           (string (overlay-get ov 'pretty-tables-string))
+           (this-command 'forward-char)
+           (disable-point-adjustment nil))
+      (setq buffer-read-only t)
+      (should (> (seq-count (lambda (c) (eq c ?\n)) string) 1))
+      (dolist (word '("one" "three" "five" "six"))
+        (goto-char (overlay-start ov))
+        (search-forward word)
+        (goto-char (match-beginning 0))
+        (pretty-tables--reveal)
+        (pcase-let ((`(,row ,pos ,whole ,head ,tail ,cut) pretty-tables--split))
+          (should (eq row ov))
+          (should (= pos (point)))
+          (should (eq whole string))
+          (should-not (overlay-get ov 'display))
+          (should-not (overlay-get ov 'before-string))
+          (should (= (overlay-start tail) (point)))
+          (should (= (overlay-end tail) (overlay-end ov)))
+          (should (equal (overlay-get tail 'display) ""))
+          (should (= (overlay-start head) (overlay-start ov)))
+          (should (= (overlay-end head) (point)))
+          (should (equal (overlay-get head 'before-string)
+                         (substring string 0 cut)))
+          (unless (= cut 0)
+            (should (eq (aref (overlay-get tail 'before-string) 0) ?\n)))
+          (let ((index (pretty-tables-tests--split-cursor)))
+            (should (= (pretty-tables--position string index) (point)))
+            ;; No newline between the cut and the character: it is on
+            ;; the first screen line of the second part.
+            (should-not (string-search "\n" (substring string (1+ cut)
+                                                       index))))))
+      (goto-char (overlay-end ov))
+      (pretty-tables--reveal)
+      (should-not pretty-tables--split)
+      (should (equal (overlay-get ov 'display) ""))
+      (should (eq (overlay-get ov 'before-string) string))
+      (should-not (seq-find (lambda (o) (overlay-get o 'pretty-tables-part))
+                            (overlays-in (point-min) (point-max)))))))
+
+(ert-deftest pretty-tables-test-split-row-base-face ()
+  "The part from point ends with the face of the row's start, then `default'.
+Emacs draws it over a base face from the text at point, which is the
+text of a cell, such as bold text."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n| a | one two three four five six |\n| b | c |\n"
+    (setq-local pretty-tables-width 16)
+    (jit-lock-refontify)
+    (jit-lock-fontify-now)
+    (let* ((ov (car (pretty-tables-tests--overlays)))
+           (beg (overlay-start ov))
+           (this-command 'forward-char)
+           (inhibit-read-only t))
+      (put-text-property beg (1+ beg) 'face 'italic)
+      (setq buffer-read-only t)
+      (search-forward "five")
+      (pretty-tables--reveal)
+      (let* ((tail (overlay-get (nth 4 pretty-tables--split) 'before-string)))
+        (dotimes (i (length tail))
+          (should (equal (last (ensure-list (get-text-property i 'face tail)) 2)
+                         '(italic default))))
+        (should-not (memq 'default (ensure-list
+                                    (get-text-property
+                                     0 'face (overlay-get ov 'pretty-tables-string)))))))))
+
+(ert-deftest pretty-tables-test-window-start-out-of-split ()
+  "A command that moves the window's start into the split row moves it out.
+Forward, to the line after the row, with point; back, to the start of
+the row's line."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n| a | one two three four five six |\n| b | c |\n"
+    (setq-local pretty-tables-width 16)
+    (jit-lock-refontify)
+    (jit-lock-fontify-now)
+    (set-window-buffer nil (current-buffer))
+    (let* ((ov (car (pretty-tables-tests--overlays)))
+           (bol (save-excursion (goto-char (overlay-start ov)) (pos-bol)))
+           (after (save-excursion (goto-char (overlay-end ov)) (1+ (point))))
+           (this-command 'scroll-up-line))
+      (setq buffer-read-only t)
+      (search-forward "five")
+      (let ((this-command 'forward-char))
+        (pretty-tables--reveal))
+      (should (car pretty-tables--split))
+      ;; Forward: from the start of the row's line to point.
+      (setq pretty-tables--window-start (cons (selected-window) bol))
+      (set-window-start nil (point))
+      (pretty-tables--reveal)
+      (should (= (window-start) after))
+      (should (= (point) after))
+      (should-not (eq (car pretty-tables--split) ov))
+      ;; Back: from the line after the row to point.
+      (goto-char (overlay-start ov))
+      (search-forward "five")
+      (let ((this-command 'forward-char))
+        (pretty-tables--reveal))
+      (setq pretty-tables--window-start (cons (selected-window) after))
+      (set-window-start nil (point))
+      (let ((pos (point)))
+        (pretty-tables--reveal)
+        (should (= (window-start) bol))
+        (should (= (point) pos)))
+      ;; A start the command did not move stays.
+      (setq pretty-tables--window-start (cons (selected-window) (point)))
+      (set-window-start nil (point))
+      (pretty-tables--reveal)
+      (should (= (window-start) (point))))))
+
+(ert-deftest pretty-tables-test-keep-point-not-on-revealed-row ()
+  "On the revealed row, Emacs adjusts point as it does in any text."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ovs (pretty-tables-tests--overlays))
+          (this-command 'next-line)
+          (disable-point-adjustment nil))
+      (pretty-tables-tests--goto-row 2)
+      (pretty-tables--reveal)
+      (should-not (pretty-tables-tests--drawn-p (nth 2 ovs)))
+      (should-not pretty-tables--split)
+      (should-not disable-point-adjustment))))
+
+(ert-deftest pretty-tables-test-split-row-revealed ()
+  "A split row that gets revealed shows its text, with no part left."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((ov (nth 2 (pretty-tables-tests--overlays)))
+          (this-command 'forward-char)
+          (disable-point-adjustment nil))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (search-forward "one")
+      (pretty-tables--reveal)
+      (should (eq (car pretty-tables--split) ov))
+      (setq buffer-read-only nil)
+      (pretty-tables--reveal)
+      (should-not pretty-tables--split)
+      (should (eq pretty-tables--revealed ov))
+      (should-not (overlay-get ov 'display))
+      (should-not (seq-find (lambda (o) (overlay-get o 'pretty-tables-part))
+                            (overlays-in (point-min) (point-max)))))))
+
+(ert-deftest pretty-tables-test-keep-point-row-end ()
+  "At the end of a drawn row the row is drawn whole again.
+The drawing keeps `cursor' t on its first character, for point at the
+row's start."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let* ((ov (nth 2 (pretty-tables-tests--overlays)))
+           (string (overlay-get ov 'before-string))
+           (this-command 'forward-char)
+           (disable-point-adjustment nil))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (search-forward "one")
+      (pretty-tables--reveal)
+      (should (pretty-tables-tests--split-cursor))
+      (goto-char (overlay-end ov))
+      (setq disable-point-adjustment nil)
+      (pretty-tables--reveal)
+      (should-not pretty-tables--cursor)
+      (should-not pretty-tables--split)
+      (should-not disable-point-adjustment)
+      (should (eq (overlay-get ov 'before-string) string))
+      (should (equal (pretty-tables-tests--cursor string) '(0 . t))))))
+
+(ert-deftest pretty-tables-test-keep-point-redraw ()
+  "A new drawing of the row point is on shows the cursor at point too."
+  (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+    (let ((this-command 'forward-char)
+          (disable-point-adjustment nil))
+      (setq buffer-read-only t)
+      (pretty-tables-tests--goto-row 2)
+      (search-forward "Emacs")
+      (backward-char 3)
+      (let ((pos (point))
+            (old (overlay-get (nth 2 (pretty-tables-tests--overlays))
+                              'pretty-tables-string)))
+        (pretty-tables--reveal)
+        (jit-lock-refontify)
+        (jit-lock-fontify-now)
+        (let* ((ov (nth 2 (pretty-tables-tests--overlays)))
+               (string (overlay-get ov 'pretty-tables-string)))
+          (should-not (eq string old))
+          (should (eq (car pretty-tables--split) ov))
+          (should (eq (nth 2 pretty-tables--split) string))
+          (should (= (pretty-tables--position
+                      string (pretty-tables-tests--split-cursor))
+                     pos))
+          ;; One pair of parts: those of the old drawing are gone.
+          (should (= (seq-count (lambda (o) (overlay-get o 'pretty-tables-part))
+                                (overlays-in (point-min) (point-max)))
+                     2)))))))
+
+(ert-deftest pretty-tables-test-cursor-in-cell-padding ()
+  "Text without a character of its own shows the cursor in its cell.
+The column separator before a cell and the spaces up to the cell's
+first visible character show in the padding before the cell's text on
+the first screen line; an empty cell shows its whole text there."
+  (dolist (pixels '(nil t))
+    (let ((check
+           (lambda ()
+             (pretty-tables-tests--with-buffer "Title\n\n| ab |   | cd |\n"
+               (let* ((string (car (pretty-tables-tests--row-strings)))
+                      (beg (overlay-start (car (pretty-tables-tests--overlays))))
+                      (index (lambda (offset)
+                               (pretty-tables--string-index
+                                string (+ beg offset))))
+                      (cell (lambda (offset)
+                              (get-text-property (funcall index offset)
+                                                 'pretty-tables-cell string))))
+                 ;; "| ab |   | cd |": the separators are at offsets
+                 ;; 0, 5, 9 and 14.
+                 (dolist (case '((0 . 0) (1 . 0) (5 . 1) (7 . 1) (9 . 2)
+                                 (10 . 2)))
+                   (should (eql (funcall cell (car case)) (cdr case))))
+                 (should (equal (substring-no-properties
+                                 string (funcall index 2)
+                                 (1+ (funcall index 2)))
+                                "a"))
+                 (should (equal (substring-no-properties
+                                 string (funcall index 11)
+                                 (1+ (funcall index 11)))
+                                "c")))))))
+      (if pixels
+          (pretty-tables-tests--with-pixels (funcall check))
+        (funcall check)))))
+
+(ert-deftest pretty-tables-test-click-cell-padding ()
+  "A click on the padding of a cell goes to the cell's text.
+To the nearest character of the cell before the click, on the same
+screen line or above it; in an empty cell, to the cell's start."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n| a | one two three four |   |\n"
+    (setq-local pretty-tables-width 16)
+    (jit-lock-refontify)
+    (jit-lock-fontify-now)
+    (let* ((string (car (pretty-tables-tests--row-strings)))
+           (lines (split-string string "\n"))
+           (last (car (last lines)))
+           (offset (- (length string) (length last))))
+      (should (cdr lines))
+      ;; The padding after the cell text on the last screen line.
+      (let* ((index (+ offset (progn (string-match "[a-z]+" last)
+                                     (match-end 0))))
+             (pos (pretty-tables--click-position string index)))
+        (should (eq (get-text-property index 'pretty-tables-cell string) 1))
+        (should-not (pretty-tables--position string index))
+        (should (eq (char-after pos) (aref last (1- (- index offset))))))
+      ;; The empty last cell, on the last screen line: the separator
+      ;; before it.
+      (let* ((index (- (length string) 3))
+             (pos (pretty-tables--click-position string index)))
+        (should (eq (get-text-property index 'pretty-tables-cell string) 2))
+        (should (save-excursion (goto-char pos) (looking-at-p "|   |$")))))))
+
+(ert-deftest pretty-tables-test-keep-point-hidden-separator ()
+  "On a hidden separator row Emacs moves point as usual.
+The row has no drawing to show the cursor on."
+  (let ((pretty-tables-borders 'lines))
+    (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
+      (let ((sep (nth 1 (pretty-tables-tests--overlays)))
+            (this-command 'forward-char)
+            (disable-point-adjustment nil))
+        (setq buffer-read-only t)
+        (should (equal (overlay-get sep 'before-string) ""))
+        (goto-char (overlay-start sep))
+        (pretty-tables--reveal)
+        (should-not disable-point-adjustment)
+        (should-not pretty-tables--cursor)))))
+
 (ert-deftest pretty-tables-test-reveal-read-only ()
   "In a read-only buffer the row point is on stays drawn by default.
 A row revealed before the buffer became read-only is drawn again."
@@ -1562,13 +1905,13 @@ A row revealed before the buffer became read-only is drawn again."
           (this-command 'next-line))
       (pretty-tables-tests--goto-row 2)
       (pretty-tables--reveal)
-      (should-not (overlay-get (nth 2 ovs) 'display))
+      (should-not (pretty-tables-tests--drawn-p (nth 2 ovs)))
       (setq buffer-read-only t)
       (pretty-tables--reveal)
-      (should (overlay-get (nth 2 ovs) 'display))
+      (should (pretty-tables-tests--drawn-p (nth 2 ovs)))
       (pretty-tables-tests--goto-row 3)
       (pretty-tables--reveal)
-      (should (overlay-get (nth 3 ovs) 'display))
+      (should (pretty-tables-tests--drawn-p (nth 3 ovs)))
       (should-not pretty-tables--revealed))))
 
 (ert-deftest pretty-tables-test-reveal-always ()
@@ -1580,7 +1923,7 @@ A row revealed before the buffer became read-only is drawn again."
       (setq buffer-read-only t)
       (pretty-tables-tests--goto-row 2)
       (pretty-tables--reveal)
-      (should-not (overlay-get (nth 2 ovs) 'display)))))
+      (should-not (pretty-tables-tests--drawn-p (nth 2 ovs))))))
 
 (ert-deftest pretty-tables-test-reveal-never ()
   "With `pretty-tables-reveal' nil, no row is revealed, except in Isearch."
@@ -1590,12 +1933,12 @@ A row revealed before the buffer became read-only is drawn again."
           (pretty-tables-reveal nil))
       (pretty-tables-tests--goto-row 2)
       (pretty-tables--reveal)
-      (should (overlay-get (nth 2 ovs) 'display))
+      (should (pretty-tables-tests--drawn-p (nth 2 ovs)))
       (let ((isearch-mode " Isearch"))
         (pretty-tables--reveal))
-      (should-not (overlay-get (nth 2 ovs) 'display))
+      (should-not (pretty-tables-tests--drawn-p (nth 2 ovs)))
       (pretty-tables--reveal)
-      (should (overlay-get (nth 2 ovs) 'display)))))
+      (should (pretty-tables-tests--drawn-p (nth 2 ovs))))))
 
 (ert-deftest pretty-tables-test-redraw-keeps-revealed ()
   "Drawing a table again leaves the revealed row raw.
@@ -1608,7 +1951,7 @@ drawing cannot find the row from point."
     (font-lock-flush)
     (jit-lock-fontify-now)
     (let ((ovs (pretty-tables-tests--overlays)))
-      (should-not (overlay-get (nth 2 ovs) 'display))
+      (should-not (pretty-tables-tests--drawn-p (nth 2 ovs)))
       (should (eq pretty-tables--revealed (nth 2 ovs))))))
 
 (ert-deftest pretty-tables-test-scroll-keeps-drawn ()
@@ -1618,7 +1961,7 @@ drawing cannot find the row from point."
           (this-command 'scroll-up-command))
       (pretty-tables-tests--goto-row 2)
       (pretty-tables--reveal)
-      (should (overlay-get (nth 2 ovs) 'display))
+      (should (pretty-tables-tests--drawn-p (nth 2 ovs)))
       (should-not pretty-tables--revealed))))
 
 (ert-deftest pretty-tables-test-scroll-keeps-revealed ()
@@ -1630,7 +1973,7 @@ drawing cannot find the row from point."
         (pretty-tables--reveal))
       (let ((this-command 'mwheel-scroll))
         (pretty-tables--reveal))
-      (should-not (overlay-get (nth 2 ovs) 'display))
+      (should-not (pretty-tables-tests--drawn-p (nth 2 ovs)))
       (should (eq pretty-tables--revealed (nth 2 ovs))))))
 
 (provide 'pretty-tables-tests)

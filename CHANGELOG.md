@@ -12,6 +12,10 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- On a drawn row, point stays where a command puts it, and the cursor is on the drawn character that shows the text at point, on any screen line of a row drawn over several. Text with no character of its own, such as a column separator or an empty cell, shows the cursor in the space before its cell's text, and a click on the empty space of a cell moves point into that cell. Before, Emacs moved point out of the drawn row's hidden text: a command that moved point back into it, such as `C-b` or evil's `k`, landed on the line above.
+
 ## [0.8.0] - 2026-11-25
 
 ### Added
