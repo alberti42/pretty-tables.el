@@ -12,6 +12,10 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Installed with straight or package.el, 0.8.0 signalled `Symbol's function definition is void: pretty-tables-define-mode` when Emacs loaded the autoloads of the Org and Markdown adaptors. Their autoloads now need only Emacs.
+
 ## [0.8.0] - 2026-11-25
 
 ### Added

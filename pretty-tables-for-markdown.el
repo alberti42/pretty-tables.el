@@ -207,7 +207,7 @@ parsers made for the cells."
 
 ;;; Mode
 
-;;;###autoload
+;;;###autoload (autoload (quote pretty-tables-for-markdown-mode) "pretty-tables-for-markdown" nil t)
 (pretty-tables-define-mode pretty-tables-for-markdown-mode
   "Display Markdown pipe tables with aligned, wrapped columns.
 The buffer text is not changed.  The row point is on is shown as its

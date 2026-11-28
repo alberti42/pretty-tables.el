@@ -318,7 +318,7 @@ unfolding it does not draw it again."
 
 ;;; Mode
 
-;;;###autoload
+;;;###autoload (autoload (quote pretty-tables-for-org-mode) "pretty-tables-for-org" nil t)
 (pretty-tables-define-mode pretty-tables-for-org-mode
   "Display Org tables with aligned, wrapped columns.
 The buffer text is not changed.  The row point is on is shown as its
