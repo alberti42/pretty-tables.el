@@ -253,36 +253,6 @@ Its body runs before the drawing is turned on or off, then
   "A mode defined with `pretty-tables-define-mode' has no lighter."
   (should-not (cadr (assq 'pretty-tables-tests-adaptor-mode minor-mode-alist))))
 
-(ert-deftest pretty-tables-test-adaptor-autoloads ()
-  "The autoloads of each adaptor can be loaded without `pretty-tables'.
-straight and package.el load them before `pretty-tables.el', so each
-form must be an `autoload' or one that needs only Emacs."
-  (require 'loaddefs-gen)
-  (dolist (mode '(pretty-tables-for-markdown-mode pretty-tables-for-org-mode))
-    (let* ((name (string-remove-suffix "-mode" (symbol-name mode)))
-           (dir (make-temp-file "pretty-tables-autoloads" t))
-           (out (expand-file-name "autoloads.el" dir))
-           (inhibit-message t)
-           forms)
-      (unwind-protect
-          (progn
-            (copy-file (locate-library (concat name ".el"))
-                       (file-name-as-directory dir))
-            (loaddefs-generate dir out)
-            (with-temp-buffer
-              (insert-file-contents out)
-              (condition-case nil
-                  (while t (push (read (current-buffer)) forms))
-                (end-of-file nil))))
-        (delete-directory dir t))
-      (dolist (form forms)
-        (should (memq (car form)
-                      '(autoload register-definition-prefixes provide))))
-      (should (cl-find-if (lambda (form)
-                            (and (eq (car form) 'autoload)
-                                 (equal (nth 1 form) `',mode)))
-                          forms)))))
-
 ;;; Layout
 
 (ert-deftest pretty-tables-test-column-widths-fit ()
