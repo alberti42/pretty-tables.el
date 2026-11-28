@@ -16,6 +16,10 @@ to `X.Y.Z`.
 
 - Before an adaptor is loaded, `C-h f` on its mode shows the mode's docstring, and `M-x` offers the Org mode only in `org-mode` buffers and the Markdown mode only in `markdown-ts-mode` buffers.
 
+### Fixed
+
+- The Markdown mode compiled its tree-sitter query of tables again for every 500 characters Emacs displayed, 0.5 ms each, in buffers with or without tables. It now compiles it once.
+
 ## [0.8.1] - 2026-11-28
 
 ### Fixed

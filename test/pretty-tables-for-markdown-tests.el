@@ -91,6 +91,27 @@ symbol."
   (memq (if (consp face) (plist-get face :inherit) face)
         '(pretty-tables-row pretty-tables-stripe)))
 
+;;; Finding tables
+
+(ert-deftest pretty-tables-for-markdown-test-table-query ()
+  "The table query is compiled and captures what the list query captures."
+  (pretty-tables-for-markdown-tests--with-buffer
+      "# Title\n\n| a | b |\n|---|---|\n| c | d |\n\nText.\n\n| e |\n|---|\n"
+    (should (treesit-compiled-query-p pretty-tables-for-markdown--table-query))
+    (let ((compiled (treesit-query-capture
+                     'markdown pretty-tables-for-markdown--table-query))
+          (listed (treesit-query-capture 'markdown '((pipe_table) @table))))
+      (should (= (length compiled) 2))
+      (should (equal compiled listed)))
+    (should (equal (mapcar (lambda (table) (plist-get table :beg))
+                           (pretty-tables-for-markdown--tables
+                            (point-min) (point-max)))
+                   (list (progn (goto-char (point-min))
+                                (search-forward "| a")
+                                (pos-bol))
+                         (progn (search-forward "| e")
+                                (pos-bol)))))))
+
 ;;; Drawing tables
 
 (ert-deftest pretty-tables-for-markdown-test-draw-delimiter ()

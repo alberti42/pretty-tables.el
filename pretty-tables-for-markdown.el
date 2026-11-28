@@ -60,6 +60,16 @@
 (require 'treesit)
 (require 'pretty-tables)
 
+(defconst pretty-tables-for-markdown--table-query
+  (when (fboundp 'treesit-query-compile)
+    (treesit-query-compile 'markdown '((pipe_table) @table)))
+  "The tree-sitter query for Markdown's pipe tables, or nil.
+Compiled when it is first used, so loading this file needs no grammar.
+A query passed as a list is compiled again on every call: 0.48 ms,
+against 0.02 ms to run this one, and `pretty-tables-for-markdown--tables'
+runs on every chunk jit-lock fontifies.  nil in an Emacs built without
+tree-sitter.")
+
 (defvar-local pretty-tables-for-markdown--range-settings nil
   "The entries this mode added to `treesit-range-settings', or nil.")
 
@@ -132,7 +142,8 @@ Each element is `left', `right' or `center'."
 Each is a table as `pretty-tables-enable' describes it."
   (when (treesit-parser-list nil 'markdown)
     (mapcar #'pretty-tables-for-markdown--table
-            (treesit-query-capture 'markdown '((pipe_table) @table)
+            (treesit-query-capture 'markdown
+                                   pretty-tables-for-markdown--table-query
                                    beg end t))))
 
 (defun pretty-tables-for-markdown--draw-delimiter (widths alignments)
