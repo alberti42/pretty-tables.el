@@ -1117,6 +1117,23 @@ background, see `pretty-tables--row-face'.  It is added with
     (add-face-text-property (match-beginning 0) (length string)
                             'pretty-tables-row-line t string)))
 
+(defun pretty-tables--add-base-face (string pos)
+  "Append to STRING the face of the text at POS, then `default'.
+Emacs draws an overlay string over a base face made of `default' and
+the `face' text property at the overlay's start, so what the faces of
+the string leave unset comes from the buffer text there.  A drawn row
+starts at POS, the start of the row; the part of
+`pretty-tables--split-row' that starts at point would take the face
+of the text at point, such as bold or the underline of a link.  With
+the faces appended, that part looks as over the base face of the
+row's start.  STRING is changed."
+  (let ((face (get-text-property pos 'face)))
+    (dolist (one (if (and (consp face) (not (keywordp (car face))))
+                     face
+                   (and face (list face))))
+      (add-face-text-property 0 (length string) one t string)))
+  (add-face-text-property 0 (length string) 'default t string))
+
 (defun pretty-tables--underline-last-line (string)
   "Draw a horizontal line under the last screen line of STRING, a row.
 The line is an underline at the descent line, on the bottom pixel row
@@ -1428,7 +1445,8 @@ overlay from the start of ROW to POS shows the part before the cut,
 and an overlay from POS to the end of ROW the part from the cut on,
 with the `cursor' property on that character.  The screen line of the
 character starts inside the second string, so it gets the string's
-`line-prefix'.  ROW shows nothing meanwhile.  The two parts replace
+`line-prefix', and the faces of `pretty-tables--add-base-face'.  ROW
+shows nothing meanwhile.  The two parts replace
 the ones of the row split before, see `pretty-tables--unsplit'."
   (pretty-tables--unsplit)
   (let* ((string (overlay-get row 'pretty-tables-string))
@@ -1444,6 +1462,7 @@ the ones of the row split before, see `pretty-tables--unsplit'."
          (parts nil))
     (remove-text-properties 0 (length head) '(cursor nil) head)
     (remove-text-properties 0 (length tail) '(cursor nil) tail)
+    (pretty-tables--add-base-face tail beg)
     (put-text-property (- index cut) (1+ (- index cut)) 'cursor t tail)
     (dolist (part (list (list beg pos head) (list pos end tail)))
       (pcase-let ((`(,from ,to ,drawing) part))
@@ -1483,6 +1502,42 @@ already, from its current drawing."
                  (eq string (overlay-get row 'pretty-tables-string))))))
     (pretty-tables--split-row row pos))))
 
+(defvar-local pretty-tables--window-start nil
+  "The selected window and its start when the current command began.
+A cons (WINDOW . START), set by `pretty-tables--note-window-start'.")
+
+(defun pretty-tables--note-window-start ()
+  "Set `pretty-tables--window-start'.  Runs from `pre-command-hook'."
+  (setq pretty-tables--window-start (cons (selected-window) (window-start))))
+
+(defun pretty-tables--window-start-out-of-split ()
+  "Move the start of the selected window out of the split row.
+When the current command moved the window's start into the row of
+`pretty-tables--split', after its start, the window would start with
+the part from point and leave out the screen lines above it: a scroll
+reaches that position, which only the split row has inside it.  A
+start that moved forward goes to the line after the row, and point,
+when it is before that line, too; one that moved back goes to the
+start of the row's line."
+  (pcase-let ((`(,row . ,_) pretty-tables--split)
+              (`(,window . ,old) pretty-tables--window-start)
+              (start (window-start)))
+    (when (and row (overlay-buffer row)
+               (eq window (selected-window))
+               (/= start old)
+               (< (overlay-start row) start (overlay-end row)))
+      (if (> start old)
+          (let ((after (save-excursion
+                         (goto-char (overlay-end row))
+                         (forward-line 1)
+                         (point))))
+            (set-window-start nil after)
+            (when (< (point) after)
+              (goto-char after)))
+        (set-window-start nil (save-excursion
+                                (goto-char (overlay-start row))
+                                (pos-bol)))))))
+
 (defun pretty-tables--reveal ()
   "Show the row point is on as raw text, and draw the one point left.
 The row is shown as raw text when `pretty-tables-reveal' says so, or
@@ -1496,7 +1551,9 @@ it out of the text the empty `display' string hides, and when point
 moved back, to before the line of the row.  The cursor is on the
 character that shows the text at point, on any screen line of the
 row; see `pretty-tables--split-row'.  A hidden separator row is left
-to Emacs."
+to Emacs.  A command that moved the window's start into that row
+moves it out first, with `pretty-tables--window-start-out-of-split'."
+  (pretty-tables--window-start-out-of-split)
   (let* ((row (pretty-tables--row-overlay-at-point))
          (ov row)
          (old pretty-tables--revealed))
@@ -1750,6 +1807,7 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   (remove-hook 'jit-lock-functions #'pretty-tables--fontify t)
   (add-hook 'jit-lock-functions #'pretty-tables--fontify 90 t)
   (add-hook 'post-command-hook #'pretty-tables--reveal nil t)
+  (add-hook 'pre-command-hook #'pretty-tables--note-window-start nil t)
   (setq pretty-tables--remapping (copy-tree face-remapping-alist))
   (add-hook 'post-command-hook #'pretty-tables--check-remapping nil t)
   (add-hook 'before-change-functions #'pretty-tables--note-change nil t)
@@ -1774,6 +1832,7 @@ cells, so it runs from `jit-lock-functions' after font-lock."
   "Stop drawing the tables of the current buffer, and show their text."
   (jit-lock-unregister #'pretty-tables--fontify)
   (remove-hook 'post-command-hook #'pretty-tables--reveal t)
+  (remove-hook 'pre-command-hook #'pretty-tables--note-window-start t)
   (remove-hook 'post-command-hook #'pretty-tables--check-remapping t)
   (remove-hook 'before-change-functions #'pretty-tables--note-change t)
   (remove-hook 'after-change-functions #'pretty-tables--note-change t)

@@ -1670,6 +1670,74 @@ to the end of the row.  The row itself shows nothing meanwhile."
       (should-not (seq-find (lambda (o) (overlay-get o 'pretty-tables-part))
                             (overlays-in (point-min) (point-max)))))))
 
+(ert-deftest pretty-tables-test-split-row-base-face ()
+  "The part from point ends with the face of the row's start, then `default'.
+Emacs draws it over a base face from the text at point, which is the
+text of a cell, such as bold text."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n| a | one two three four five six |\n| b | c |\n"
+    (setq-local pretty-tables-width 16)
+    (jit-lock-refontify)
+    (jit-lock-fontify-now)
+    (let* ((ov (car (pretty-tables-tests--overlays)))
+           (beg (overlay-start ov))
+           (this-command 'forward-char)
+           (inhibit-read-only t))
+      (put-text-property beg (1+ beg) 'face 'italic)
+      (setq buffer-read-only t)
+      (search-forward "five")
+      (pretty-tables--reveal)
+      (let* ((tail (overlay-get (nth 4 pretty-tables--split) 'before-string)))
+        (dotimes (i (length tail))
+          (should (equal (last (ensure-list (get-text-property i 'face tail)) 2)
+                         '(italic default))))
+        (should-not (memq 'default (ensure-list
+                                    (get-text-property
+                                     0 'face (overlay-get ov 'pretty-tables-string)))))))))
+
+(ert-deftest pretty-tables-test-window-start-out-of-split ()
+  "A command that moves the window's start into the split row moves it out.
+Forward, to the line after the row, with point; back, to the start of
+the row's line."
+  (pretty-tables-tests--with-buffer
+      "Title\n\n| a | one two three four five six |\n| b | c |\n"
+    (setq-local pretty-tables-width 16)
+    (jit-lock-refontify)
+    (jit-lock-fontify-now)
+    (set-window-buffer nil (current-buffer))
+    (let* ((ov (car (pretty-tables-tests--overlays)))
+           (bol (save-excursion (goto-char (overlay-start ov)) (pos-bol)))
+           (after (save-excursion (goto-char (overlay-end ov)) (1+ (point))))
+           (this-command 'scroll-up-line))
+      (setq buffer-read-only t)
+      (search-forward "five")
+      (let ((this-command 'forward-char))
+        (pretty-tables--reveal))
+      (should (car pretty-tables--split))
+      ;; Forward: from the start of the row's line to point.
+      (setq pretty-tables--window-start (cons (selected-window) bol))
+      (set-window-start nil (point))
+      (pretty-tables--reveal)
+      (should (= (window-start) after))
+      (should (= (point) after))
+      (should-not (eq (car pretty-tables--split) ov))
+      ;; Back: from the line after the row to point.
+      (goto-char (overlay-start ov))
+      (search-forward "five")
+      (let ((this-command 'forward-char))
+        (pretty-tables--reveal))
+      (setq pretty-tables--window-start (cons (selected-window) after))
+      (set-window-start nil (point))
+      (let ((pos (point)))
+        (pretty-tables--reveal)
+        (should (= (window-start) bol))
+        (should (= (point) pos)))
+      ;; A start the command did not move stays.
+      (setq pretty-tables--window-start (cons (selected-window) (point)))
+      (set-window-start nil (point))
+      (pretty-tables--reveal)
+      (should (= (window-start) (point))))))
+
 (ert-deftest pretty-tables-test-keep-point-not-on-revealed-row ()
   "On the revealed row, Emacs adjusts point as it does in any text."
   (pretty-tables-tests--with-buffer pretty-tables-tests--hidden-table
