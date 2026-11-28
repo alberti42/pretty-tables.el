@@ -12,6 +12,8 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-28
+
 ### Fixed
 
 - Installed with straight or package.el, 0.8.0 signalled `Symbol's function definition is void: pretty-tables-define-mode` when Emacs loaded the autoloads of the Org and Markdown adaptors. Their autoloads now need only Emacs.
@@ -167,7 +169,8 @@ to `X.Y.Z`.
 - Data rows are drawn with alternating backgrounds: the faces `markdown-table-view-row`, which inherits `hl-line`, and `markdown-table-view-stripe`, which inherits `lazy-highlight`. `markdown-table-view-stripe-rows` turns them off.
 - `markdown-table-view-row-lines` draws a line under each data row but the last, with the underline of the face `markdown-table-view-row-line`. It is off by default.
 
-[Unreleased]: https://github.com/alberti42/pretty-tables.el/compare/v0.8.0...main
+[Unreleased]: https://github.com/alberti42/pretty-tables.el/compare/v0.8.1...main
+[0.8.1]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.8.1
 [0.8.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.8.0
 [0.7.1]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.7.1
 [0.7.0]: https://github.com/alberti42/pretty-tables.el/releases/tag/v0.7.0
