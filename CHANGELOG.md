@@ -12,6 +12,10 @@ to `X.Y.Z`.
 
 ## [Unreleased]
 
+### Changed
+
+- Before an adaptor is loaded, `C-h f` on its mode shows the mode's docstring, and `M-x` offers the Org mode only in `org-mode` buffers and the Markdown mode only in `markdown-ts-mode` buffers.
+
 ## [0.8.1] - 2026-11-28
 
 ### Fixed

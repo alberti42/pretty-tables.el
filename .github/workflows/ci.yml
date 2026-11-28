@@ -115,6 +115,7 @@ jobs:
                                 "pretty-tables-for-markdown.el"
                                 "pretty-tables-for-org.el"
                                 "test/pretty-tables-tests.el"
+                                "test/pretty-tables-autoloads-tests.el"
                                 "test/pretty-tables-for-markdown-tests.el"
                                 "test/pretty-tables-for-org-tests.el"))
               (checkdoc-file file))
